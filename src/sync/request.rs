@@ -45,8 +45,10 @@ impl Read for HttpRequestReader {
     &mut self,
     buf: &mut [u8],
   ) -> std::io::Result<usize> {
+    if self.content_length == 0 {
+      return Ok(0);
+    }
     let count: usize = self.stream.read(buf)?;
-
     if count == 0 {
       return Ok(0);
     }

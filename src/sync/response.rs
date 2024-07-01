@@ -1,16 +1,16 @@
 use std::io::Write;
 use std::io::{self};
-use std::net::TcpStream;
+use std::net::{Shutdown, TcpStream};
 
 use crate::Headers;
 
-pub trait Response: Write {
+pub trait Response: Write + Send + Sync {
   fn headers(&mut self) -> &mut Headers;
-  // fn message<S: AsRef<str>>(&mut self, message: S) -> &mut Headers;
   fn write_header(
     &mut self,
     status_code: usize,
   ) -> io::Result<()>;
+  fn end(&mut self) -> io::Result<()>;
 }
 
 pub struct HttpResponse {
@@ -23,6 +23,11 @@ impl Response for HttpResponse {
     &mut self.headers
   }
 
+  fn end(&mut self) -> io::Result<()> {
+    self.stream.flush()?;
+    self.stream.shutdown(Shutdown::Both)
+  }
+
   fn write_header(
     &mut self,
     status_code: usize,
@@ -31,39 +36,28 @@ impl Response for HttpResponse {
     let response_message = "OK";
 
     // Write Reply
-    self.stream.write_all(b"HTTP/1.1 ")?;
+    self.stream.write(b"HTTP/1.1 ")?;
     // Status Code
-    self.stream.write_all(response_code.as_bytes())?;
-    self.stream.write_all(b" ")?;
+    self.stream.write(response_code.as_bytes())?;
+    self.stream.write(b" ")?;
 
     // Message
-    self.stream.write_all(response_message.as_bytes())?;
-    self.stream.write_all(b"\r\n")?;
+    self.stream.write(response_message.as_bytes())?;
+    self.stream.write(b"\r\n")?;
 
     for (key, values) in self.headers.iter() {
-      self.stream.write_all(key.as_bytes())?;
-      self.stream.write_all(b": ")?;
+      self.stream.write(key.as_bytes())?;
+      self.stream.write(b": ")?;
 
-      self.stream.write_all(values.as_bytes())?;
-
-      // for (i, value) in values.iter().enumerate() {
-      //   self.stream.write_all(value.as_bytes())?;
-      //   if i != values.len() - 1 {
-      //     self.stream.write_all(b", ")?;
-      //   }
-      // }
-
-      self.stream.write_all(b"\r\n")?;
+      self.stream.write(values.as_bytes())?;
+      self.stream.write(b"\r\n")?;
     }
 
-    self.stream.write_all(b"\r\n")?;
+    self.stream.write(b"\r\n")?;
+    self.stream.flush()?;
 
     Ok(())
   }
-
-  // fn message<S: AsRef<str>>(&mut self, _message: S) -> &mut Headers {
-  //     todo!()
-  //   }
 }
 
 impl Write for HttpResponse {

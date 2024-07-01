@@ -1,7 +1,5 @@
 use std::io;
 use std::io::Read;
-use std::io::Write;
-use std::net::Shutdown;
 use std::net::TcpListener;
 use std::net::ToSocketAddrs;
 

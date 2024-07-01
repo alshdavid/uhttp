@@ -6,7 +6,6 @@ use crate::Headers;
 
 pub trait Response: Write + Send + Sync {
   fn headers(&mut self) -> &mut Headers;
-  // fn message<S: AsRef<str>>(&mut self, message: S) -> &mut Headers;
   fn write_header(
     &mut self,
     status_code: usize,
@@ -59,10 +58,6 @@ impl Response for HttpResponse {
 
     Ok(())
   }
-
-  // fn message<S: AsRef<str>>(&mut self, _message: S) -> &mut Headers {
-  //     todo!()
-  //   }
 }
 
 impl Write for HttpResponse {

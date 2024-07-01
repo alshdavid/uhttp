@@ -32,6 +32,7 @@ impl Server {
     let listener = TcpListener::bind(addr)?;
 
     while let Ok((mut stream, _)) = listener.accept() {
+      println!("connect");
       let mut header_bytes = Vec::<u8>::new();
       let mut header_count = 0;
 

@@ -1,11 +1,10 @@
 use std::io;
-use std::io::Read;
-use std::io::Write;
-use std::net::Shutdown;
-use std::net::TcpListener;
-use std::net::ToSocketAddrs;
+use tokio::io::AsyncReadExt;
+use tokio::io::AsyncWriteExt;
+use tokio::net::TcpListener;
+use tokio::net::ToSocketAddrs;
 
-use super::HttpRequestReader;
+// use super::HttpRequestReader;
 use super::HttpResponse;
 use super::Request;
 use super::Response;
@@ -27,14 +26,13 @@ impl Server {
     }
   }
 
-  pub fn listen<A: ToSocketAddrs>(
+  pub async fn listen<A: ToSocketAddrs>(
     &self,
     addr: A,
   ) -> io::Result<()> {
-    let listener = TcpListener::bind(addr)?;
+    let listener = TcpListener::bind(addr).await?;
 
-    while let Ok((mut stream, _)) = listener.accept() {
-      println!("connect");
+    while let Ok((mut stream, _)) = listener.accept().await {
       let mut header_bytes = Vec::<u8>::new();
       let mut header_count = 0;
 
@@ -45,7 +43,7 @@ impl Server {
       let mut rc2 = false;
 
       loop {
-        stream.read(&mut buf)?;
+        stream.read(&mut buf).await?;
         let v = buf[0];
 
         if rc1 == false && v == RC {
@@ -96,22 +94,23 @@ impl Server {
         headers.set(key, values)
       }
 
+      let (reader, writer) = stream.into_split();
+      
       let request = Request {
         method,
         url,
         proto: format!("HTTP/1.{}", req_version),
         headers,
         host,
-        body: Box::new(HttpRequestReader {
-          content_length,
-          cursor: 0,
-          stream: stream.try_clone()?,
-        }),
+        content_length,
+        body: Box::new(reader),
       };
+
+      write!(writer, "hell");
 
       let response = HttpResponse {
         headers: Default::default(),
-        stream,
+        stream: Box::new(writer),
       };
 
       (*self.handler)(request, Box::new(response))?;

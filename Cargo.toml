@@ -3,4 +3,13 @@ name = "uhttp"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "example"
+path = "example/main.rs"
+
+[lib]
+name = "uhttp"
+path = "./src/lib.rs"
+
 [dependencies]
+httparse = "1"

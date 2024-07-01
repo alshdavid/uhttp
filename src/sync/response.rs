@@ -1,6 +1,6 @@
 use std::{io::{self, Write}, net::TcpStream};
 
-use super::Headers;
+use crate::Headers;
 
 pub trait Response: Write {
   fn headers(&mut self) -> &mut Headers;
@@ -41,6 +41,7 @@ impl Response for HttpResponse {
     for (key, values) in self.headers.iter() {
       self.stream.write_all(key.as_bytes())?;
       self.stream.write_all(b": ")?;
+
       self.stream.write_all(values.as_bytes())?;
 
       // for (i, value) in values.iter().enumerate() {

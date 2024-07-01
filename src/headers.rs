@@ -4,28 +4,19 @@ pub type RawHeaders = HashMap<String, String>;
 pub type ParsedHeaders = HashMap<String, Vec<String>>;
 
 
-#[derive(Default, Debug)]
+#[derive(Default)]
 pub struct Headers {
-  pub(super) internal: HashMap<String, String>,
+  internal: HashMap<String, String>,
+}
+
+impl std::fmt::Debug for Headers {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+      f.debug_map().entries(&self.internal).finish()
+    }
 }
 
 impl Headers {
-  pub fn add<K: AsRef<str>, V: AsRef<str>>(
-    &mut self,
-    key: K,
-    value: V,
-  ) {
-    if let Some(values) = self.internal.get_mut(key.as_ref()) {
-      values.push_str(", ");
-      values.push_str(value.as_ref());
-    } else {
-      self
-        .internal
-        .insert(key.as_ref().to_string(), value.as_ref().to_string());
-    }
-  }
-
-  pub fn replace<K: AsRef<str>, V: AsRef<str>>(
+  pub fn set<K: AsRef<str>, V: AsRef<str>>(
     &mut self,
     key: K,
     value: V,

@@ -36,7 +36,6 @@ fn main() -> io::Result<()> {
       let v = buf[0];
 
       if rc1 == true && nl1 == true && rc2 == true && nl2 == true {
-        break;
       } else if rc1 == false && v == RC {
         rc1 = true;
       } else if rc1 == true && nl1 == false && v == NL {
@@ -46,6 +45,8 @@ fn main() -> io::Result<()> {
         rc2 = true;
       } else if rc1 == true && nl1 == true && rc2 == true && nl2 == false && v == NL {
         nl2 = true;
+        break;
+
       } else {
         rc1 = false;
         nl1 = false;
@@ -56,12 +57,22 @@ fn main() -> io::Result<()> {
       header_bytes.push(buf[0]);
     }
 
+    let mut buf = [0u8; 1];
+
+    loop {
+      stream.read_exact(&mut buf)?;
+      let v = buf[0];
+      println!("{}", String::from_utf8(vec![v]).unwrap());
+    }
+
+
+    return Ok(());
+
     let mut request_headers = vec![httparse::EMPTY_HEADER; header_count - 1];
     let mut req = httparse::Request::new(&mut request_headers);
     req.parse(&header_bytes).map_err(|e| io::Error::other(e))?;
 
 
-    dbg!(&req);
 
     let mut response_headers = HashMap::<String, Vec<String>>::new();
     response_headers.insert(

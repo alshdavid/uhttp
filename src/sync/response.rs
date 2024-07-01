@@ -1,6 +1,7 @@
 use std::io::Write;
 use std::io::{self};
-use std::net::{Shutdown, TcpStream};
+use std::net::Shutdown;
+use std::net::TcpStream;
 
 use crate::Headers;
 

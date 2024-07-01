@@ -1,13 +1,14 @@
 use std::io;
+
+use futures::Future;
 use tokio::io::AsyncReadExt;
-use tokio::io::AsyncWriteExt;
 use tokio::net::TcpListener;
 use tokio::net::ToSocketAddrs;
 
-// use super::HttpRequestReader;
+use super::HttpRequestReader;
 use super::HttpResponse;
 use super::Request;
-use super::Response;
+use super::ResponseRef;
 use crate::constants::DEFAULT_METHOD;
 use crate::constants::DEFAULT_URL;
 use crate::constants::HEADER_CONTENT_LENGTH;
@@ -15,12 +16,12 @@ use crate::constants::NL;
 use crate::constants::RC;
 use crate::Headers;
 
-pub struct Server {
-  handler: Box<dyn Fn(Request, Box<dyn Response>) -> io::Result<()>>,
+pub struct Server<Fut: Future<Output = io::Result<()>>> {
+  handler: Box<dyn Fn(Request, ResponseRef) -> Fut>,
 }
 
-impl Server {
-  pub fn new(handler: impl Fn(Request, Box<dyn Response>) -> io::Result<()> + 'static) -> Self {
+impl<Fut: Future<Output = io::Result<()>>> Server<Fut> {
+  pub fn new(handler: impl Fn(Request, ResponseRef) -> Fut + 'static) -> Self {
     Self {
       handler: Box::new(handler),
     }
@@ -33,6 +34,7 @@ impl Server {
     let listener = TcpListener::bind(addr).await?;
 
     while let Ok((mut stream, _)) = listener.accept().await {
+      println!("connect");
       let mut header_bytes = Vec::<u8>::new();
       let mut header_count = 0;
 
@@ -95,25 +97,26 @@ impl Server {
       }
 
       let (reader, writer) = stream.into_split();
-      
+
       let request = Request {
         method,
         url,
         proto: format!("HTTP/1.{}", req_version),
         headers,
         host,
-        content_length,
-        body: Box::new(reader),
+        body: Box::new(HttpRequestReader {
+          content_length,
+          cursor: 0,
+          stream: reader,
+        }),
       };
-
-      write!(writer, "hell");
 
       let response = HttpResponse {
         headers: Default::default(),
-        stream: Box::new(writer),
+        stream: writer,
       };
 
-      (*self.handler)(request, Box::new(response))?;
+      (*self.handler)(request, Box::new(response)).await?;
     }
 
     Ok(())

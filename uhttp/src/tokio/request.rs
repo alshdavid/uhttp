@@ -2,9 +2,7 @@ use std::future::Future;
 use std::io;
 use std::pin::Pin;
 
-use tokio::io::AsyncReadExt;
 use tokio::io::AsyncRead;
-use tokio::net::tcp::OwnedReadHalf;
 
 use crate::constants::HEADER_CONTENT_LENGTH;
 use crate::Headers;
@@ -44,25 +42,3 @@ impl std::fmt::Debug for Request {
       .finish()
   }
 }
-
-pub struct HttpRequestReader {
-  pub content_length: usize,
-  pub cursor: usize,
-  pub stream: Box<dyn AsyncRead>,
-}
-
-// impl BodyReader for HttpRequestReader {
-//   fn read<'a>(
-//     &'a mut self,
-//     buf: &'a mut [u8],
-//   ) -> Pin<Box<dyn Future<Output = io::Result<usize>> + Send + Sync + 'a>> {
-//     Box::pin(async move {
-//       if self.cursor >= self.content_length {
-//         return Ok(0);
-//       }
-//       let count = self.stream.read(buf).await?;
-//       self.cursor += count;
-//       return Ok(count);
-//     })
-//   }
-// }

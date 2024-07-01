@@ -2,8 +2,8 @@ use std::future::Future;
 use std::io;
 use std::pin::Pin;
 
+use tokio::io::AsyncWrite;
 use tokio::io::AsyncWriteExt;
-use tokio::net::tcp::OwnedWriteHalf;
 
 use crate::Headers;
 
@@ -24,7 +24,7 @@ pub trait Response: Send + Sync {
 
 pub struct HttpResponse {
   pub(super) headers: Headers,
-  pub(super) stream: OwnedWriteHalf,
+  pub(super) stream: Box<dyn AsyncWrite + Unpin + Send + Sync>,
 }
 
 impl Response for HttpResponse {

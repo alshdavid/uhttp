@@ -1,0 +1,23 @@
+[package]
+name = "uhttp"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "uhttp"
+path = "./src/lib.rs"
+
+[[bench]]
+name = "benchmarks"
+harness = false
+path = "src/bench.rs"
+
+[features]
+# tokio = []
+
+[dependencies]
+httparse = "1"
+tokio = { version = "1", features = ["full"] }
+
+[dev-dependencies]
+divan = "0.*"

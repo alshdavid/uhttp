@@ -1,8 +1,8 @@
 use std::io;
 use std::io::Write;
 
-use uhttp::body_parser;
-use uhttp::Server;
+use uhttp::sync::body_parser;
+use uhttp::sync::Server;
 
 fn main() -> io::Result<()> {
   let server = Server::new(|mut req, mut res| {

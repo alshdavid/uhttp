@@ -1,24 +1,17 @@
-[package]
-name = "uhttp"
-version = "0.1.0"
-edition = "2021"
+[workspace]
+resolver = "2"
 
-[[bin]]
-name = "example"
-path = "example/main.rs"
+members = [
+  "./uhttp",
+  "./examples/*",
+]
 
-[lib]
-name = "uhttp"
-path = "./src/lib.rs"
-
-[[bench]]
-name = "benchmarks"
-harness = false
-path = "src/lib.rs"
-
-[dependencies]
-httparse = "1"
-tokio = { version = "1", features = ["full"] }
-
-[dev-dependencies]
-divan = "0.*"
+[profile.release]
+opt-level = 3
+debug = false
+lto = true
+strip = "debuginfo"
+panic = 'unwind'
+incremental = false
+codegen-units = 1
+rpath = false

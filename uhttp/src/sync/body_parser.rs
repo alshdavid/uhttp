@@ -5,11 +5,11 @@ use crate::constants::DEFAULT_BUFFER_SIZE;
 
 pub fn bytes(reader: &mut impl Read) -> io::Result<Vec<u8>> {
   let mut body = Vec::<u8>::new();
-  let mut buf = [0u8; DEFAULT_BUFFER_SIZE];
+  let mut buf = vec![0u8; DEFAULT_BUFFER_SIZE];
 
   loop {
     let count = reader.read(&mut buf)?;
-    body.extend(buf);
+    body.extend(buf.drain(..count));
     if count == 0 {
       break;
     }

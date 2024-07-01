@@ -6,13 +6,11 @@ use tokio::io::AsyncReadExt;
 use tokio::net::TcpListener;
 use tokio::net::ToSocketAddrs;
 
-use super::HttpRequestReader;
 use super::HttpResponse;
 use super::Request;
 use super::ResponseRef;
 use crate::constants::DEFAULT_METHOD;
 use crate::constants::DEFAULT_URL;
-use crate::constants::HEADER_CONTENT_LENGTH;
 use crate::constants::NL;
 use crate::constants::RC;
 use crate::Headers;
@@ -92,17 +90,10 @@ where
         let host = unsafe { String::from_utf8_unchecked(raw_headers[0].value.to_owned()) };
 
         let mut headers = Headers::default();
-        let mut content_length: usize = 0;
 
         for header in raw_headers.drain(0..) {
           let key = header.name.to_string().to_lowercase();
-
           let values = unsafe { String::from_utf8_unchecked(header.value.to_owned()) };
-
-          if key == HEADER_CONTENT_LENGTH {
-            content_length = values.parse::<usize>().unwrap();
-          }
-
           headers.set(key, values)
         }
 
@@ -115,16 +106,11 @@ where
           headers,
           host,
           body: Box::new(reader),
-          // body: Box::new(HttpRequestReader {
-          //   content_length,
-          //   cursor: 0,
-          //   stream: reader,
-          // }),
         };
 
         let response = HttpResponse {
           headers: Default::default(),
-          stream: writer,
+          stream: Box::new(writer),
         };
 
         handler(request, Box::new(response)).await

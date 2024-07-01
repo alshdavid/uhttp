@@ -1,7 +1,7 @@
+use std::future::Future;
 use std::io;
 use std::pin::Pin;
 
-use futures::Future;
 use tokio::io::AsyncWriteExt;
 use tokio::net::tcp::OwnedWriteHalf;
 
@@ -9,16 +9,16 @@ use crate::Headers;
 
 pub type ResponseRef = Box<dyn Response>;
 
-pub trait Response {
+pub trait Response: Send + Sync {
   fn headers(&mut self) -> &mut Headers;
   fn write_header<'a>(
     &'a mut self,
     status_code: usize,
-  ) -> Pin<Box<dyn Future<Output = io::Result<()>> + 'a>>;
+  ) -> Pin<Box<dyn Future<Output = io::Result<()>> + Send + Sync + 'a>>;
   fn write<'a>(
     &'a mut self,
     buf: &'a [u8],
-  ) -> Pin<Box<dyn Future<Output = io::Result<usize>> + 'a>>;
+  ) -> Pin<Box<dyn Future<Output = io::Result<usize>> + Send + Sync + 'a>>;
   fn flush<'a>(&'a mut self) -> Pin<Box<dyn Future<Output = io::Result<()>> + 'a>>;
 }
 
@@ -35,7 +35,7 @@ impl Response for HttpResponse {
   fn write<'a>(
     &'a mut self,
     buf: &'a [u8],
-  ) -> Pin<Box<dyn Future<Output = io::Result<usize>> + 'a>> {
+  ) -> Pin<Box<dyn Future<Output = io::Result<usize>> + Send + Sync + 'a>> {
     Box::pin(async move { self.stream.write(buf).await })
   }
 
@@ -46,7 +46,7 @@ impl Response for HttpResponse {
   fn write_header<'a>(
     &'a mut self,
     status_code: usize,
-  ) -> Pin<Box<dyn Future<Output = io::Result<()>> + 'a>> {
+  ) -> Pin<Box<dyn Future<Output = io::Result<()>> + Send + Sync + 'a>> {
     Box::pin(async move {
       let response_code = format!("{}", status_code);
       let response_message = "OK";

@@ -3,6 +3,7 @@ use std::io;
 use std::pin::Pin;
 
 use tokio::io::AsyncReadExt;
+use tokio::io::AsyncRead;
 use tokio::net::tcp::OwnedReadHalf;
 
 use crate::constants::HEADER_CONTENT_LENGTH;
@@ -10,11 +11,8 @@ use crate::Headers;
 
 pub type BodyReaderRef = Box<dyn BodyReader>;
 
-pub trait BodyReader {
-  fn read<'a>(
-    &'a mut self,
-    buf: &'a mut [u8],
-  ) -> Pin<Box<dyn Future<Output = io::Result<usize>> + 'a>>;
+pub trait BodyReader: Send + Sync {
+  fn read<'a>(&'a mut self, buf: &'a mut [u8]) -> Pin<Box<dyn Future<Output = io::Result<usize>> + Send + Sync + 'a>>;
 }
 
 pub struct Request {
@@ -22,7 +20,7 @@ pub struct Request {
   pub url: String,
   pub proto: String,
   pub headers: Headers,
-  pub body: Box<dyn BodyReader>,
+  pub body: Box<dyn AsyncRead + Unpin + Send + Sync>,
   pub host: String,
 }
 
@@ -50,27 +48,21 @@ impl std::fmt::Debug for Request {
 pub struct HttpRequestReader {
   pub content_length: usize,
   pub cursor: usize,
-  pub stream: OwnedReadHalf,
+  pub stream: Box<dyn AsyncRead>,
 }
 
-impl BodyReader for HttpRequestReader {
-  fn read<'a>(
-    &'a mut self,
-    buf: &'a mut [u8],
-  ) -> Pin<Box<dyn Future<Output = io::Result<usize>> + 'a>> {
-    Box::pin(async move {
-      if self.content_length == 0 {
-        return Ok(0);
-      }
-      let count = self.stream.read(buf).await?;
-      if count == 0 {
-        return Ok(0);
-      }
-      self.cursor += count;
-      if self.cursor >= self.content_length {
-        return Ok(0);
-      }
-      return Ok(count);
-    })
-  }
-}
+// impl BodyReader for HttpRequestReader {
+//   fn read<'a>(
+//     &'a mut self,
+//     buf: &'a mut [u8],
+//   ) -> Pin<Box<dyn Future<Output = io::Result<usize>> + Send + Sync + 'a>> {
+//     Box::pin(async move {
+//       if self.cursor >= self.content_length {
+//         return Ok(0);
+//       }
+//       let count = self.stream.read(buf).await?;
+//       self.cursor += count;
+//       return Ok(count);
+//     })
+//   }
+// }

@@ -42,11 +42,15 @@ impl Headers {
     self.internal.get(key.as_ref())
   }
 
-  pub fn iter<'a>(&'a mut self) -> Box<dyn Iterator<Item = (&'a String, &'a String)> + 'a> {
+  pub fn iter<'a>(
+    &'a mut self
+  ) -> Box<dyn Iterator<Item = (&'a String, &'a String)> + Send + Sync + 'a> {
     Box::new(self.internal.iter())
   }
 
-  pub fn iter_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item = (&'a String, &'a mut String)> + 'a> {
+  pub fn iter_mut<'a>(
+    &'a mut self
+  ) -> Box<dyn Iterator<Item = (&'a String, &'a mut String)> + Send + Sync + 'a> {
     Box::new(self.internal.iter_mut())
   }
 }

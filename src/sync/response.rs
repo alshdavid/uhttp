@@ -1,4 +1,6 @@
-use std::{io::{self, Write}, net::TcpStream};
+use std::io::Write;
+use std::io::{self};
+use std::net::TcpStream;
 
 use crate::Headers;
 
@@ -58,7 +60,7 @@ impl Response for HttpResponse {
 
     Ok(())
   }
-  
+
   // fn message<S: AsRef<str>>(&mut self, _message: S) -> &mut Headers {
   //     todo!()
   //   }

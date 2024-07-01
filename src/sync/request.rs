@@ -1,7 +1,7 @@
-use std::{io::Read, net::TcpStream};
+use std::io::Read;
+use std::net::TcpStream;
 
 use crate::constants::HEADER_CONTENT_LENGTH;
-
 use crate::Headers;
 
 pub struct Request {
@@ -20,7 +20,7 @@ impl std::fmt::Debug for Request {
   ) -> std::fmt::Result {
     let content_length = match self.headers.get(HEADER_CONTENT_LENGTH) {
       Some(v) => v.to_owned(),
-      None => format!("0")
+      None => format!("0"),
     };
 
     f.debug_struct("Request")

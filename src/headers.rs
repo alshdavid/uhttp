@@ -1,12 +1,8 @@
-use std::{collections::HashMap, io};
+use std::collections::HashMap;
 
 pub type RawHeaders = HashMap<String, String>;
 pub type ParsedHeaders = HashMap<String, Vec<String>>;
 
-pub(super) type HeaderRaw = (
-  Vec<u8>,
-  Vec<u8>,
-);
 
 #[derive(Default, Debug)]
 pub struct Headers {

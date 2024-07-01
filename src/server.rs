@@ -14,14 +14,12 @@ static NL: u8 = b'\n';
 
 pub struct Server {
   handler: Box<dyn Fn(Request, Box<dyn Response>) -> io::Result<()>>,
-  listener: Option<TcpListener>,
 }
 
 impl Server {
   pub fn new(handler: impl Fn(Request, Box<dyn Response>) -> io::Result<()> + 'static) -> Self {
     Self {
       handler: Box::new(handler),
-      listener: None,
     }
   }
 

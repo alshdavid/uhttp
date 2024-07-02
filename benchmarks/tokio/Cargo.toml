@@ -1,0 +1,8 @@
+[package]
+name = "benchmark_uhttp_tokio"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+uhttp = { path = "../../uhttp" }
+tokio = { version = "1", features = ["full"] }

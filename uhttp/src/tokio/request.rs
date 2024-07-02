@@ -2,7 +2,7 @@ use std::future::Future;
 use std::io;
 use std::pin::Pin;
 
-use tokio::io::AsyncRead;
+use futures::io::AsyncRead;
 
 use crate::constants::HEADER_CONTENT_LENGTH;
 use crate::Headers;

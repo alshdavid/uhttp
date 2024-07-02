@@ -8,7 +8,7 @@ fn main() -> io::Result<()> {
     if req.url == "/" {
       res.headers().set("Content-Type", "text/plain");
       res.write_header(200)?;
-  
+
       res.write_all(b"Hello, World!")?;
     }
 

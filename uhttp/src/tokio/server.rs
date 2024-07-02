@@ -5,6 +5,8 @@ use std::sync::Arc;
 use tokio::io::AsyncReadExt;
 use tokio::net::TcpListener;
 use tokio::net::ToSocketAddrs;
+use tokio_util::compat::FuturesAsyncReadCompatExt;
+use tokio_util::compat::TokioAsyncReadCompatExt;
 
 use super::HttpResponse;
 use super::Request;
@@ -105,7 +107,7 @@ where
           proto: format!("HTTP/1.{}", req_version),
           headers,
           host,
-          body: Box::new(reader),
+          body: Box::new(reader.compat()),
         };
 
         let response = HttpResponse {

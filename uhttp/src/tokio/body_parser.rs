@@ -1,7 +1,7 @@
 use std::io;
 
-use tokio::io::AsyncRead;
-use tokio::io::AsyncReadExt;
+use futures::io::AsyncRead;
+use futures::io::AsyncReadExt;
 
 use crate::constants::DEFAULT_BUFFER_SIZE;
 

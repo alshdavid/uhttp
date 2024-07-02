@@ -4,7 +4,9 @@ resolver = "2"
 members = [
   "./uhttp",
   "./examples/*",
-  "./benchmarks/*",
+  "./benchmarks/actix",
+  "./benchmarks/tokio",
+  "./benchmarks/sync",
 ]
 
 [profile.release]

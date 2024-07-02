@@ -23,8 +23,8 @@ pub trait Response: Send + Sync {
 }
 
 pub struct HttpResponse {
-  pub(super) headers: Headers,
-  pub(super) stream: Box<dyn AsyncWrite + Unpin + Send + Sync>,
+  pub headers: Headers,
+  pub stream: Box<dyn AsyncWrite + Unpin + Send + Sync>,
 }
 
 impl Response for HttpResponse {

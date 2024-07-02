@@ -1,6 +1,7 @@
 use std::io;
 
-use tokio::io::{AsyncRead, AsyncReadExt};
+use tokio::io::AsyncRead;
+use tokio::io::AsyncReadExt;
 
 use crate::constants::DEFAULT_BUFFER_SIZE;
 
@@ -24,7 +25,9 @@ pub async fn utf8<Read: AsyncRead + Unpin>(reader: &mut Read) -> io::Result<Stri
   String::from_utf8(body).map_err(|err| io::Error::other(err))
 }
 
-pub async unsafe fn utf8_unchecked<Read: AsyncRead + Unpin>(reader: &mut Read) -> io::Result<String> {
+pub async unsafe fn utf8_unchecked<Read: AsyncRead + Unpin>(
+  reader: &mut Read
+) -> io::Result<String> {
   let body = bytes(reader).await?;
   Ok(unsafe { String::from_utf8_unchecked(body) })
 }

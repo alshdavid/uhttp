@@ -21,9 +21,7 @@ fn bench_bytes(b: Bencher) {
 
   let rt = Builder::new_current_thread().build().unwrap();
 
-  b.bench_local(move || {
-    rt.block_on(body_parser::bytes(&mut data))
-  })
+  b.bench_local(move || rt.block_on(body_parser::bytes(&mut data)))
 }
 
 #[bench]
@@ -33,9 +31,7 @@ fn bench_utf8(b: Bencher) {
 
   let rt = Builder::new_current_thread().build().unwrap();
 
-  b.bench_local(move || {
-    rt.block_on(body_parser::utf8(&mut data))
-  })
+  b.bench_local(move || rt.block_on(body_parser::utf8(&mut data)))
 }
 
 #[bench]
@@ -45,7 +41,5 @@ fn bench_utf8_unchecked(b: Bencher) {
 
   let rt = Builder::new_current_thread().build().unwrap();
 
-  b.bench_local(move || {
-    rt.block_on(unsafe { body_parser::utf8_unchecked(&mut data) })
-  })
+  b.bench_local(move || rt.block_on(unsafe { body_parser::utf8_unchecked(&mut data) }))
 }

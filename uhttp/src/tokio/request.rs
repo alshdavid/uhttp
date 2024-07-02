@@ -10,7 +10,10 @@ use crate::Headers;
 pub type BodyReaderRef = Box<dyn BodyReader>;
 
 pub trait BodyReader: Send + Sync {
-  fn read<'a>(&'a mut self, buf: &'a mut [u8]) -> Pin<Box<dyn Future<Output = io::Result<usize>> + Send + Sync + 'a>>;
+  fn read<'a>(
+    &'a mut self,
+    buf: &'a mut [u8],
+  ) -> Pin<Box<dyn Future<Output = io::Result<usize>> + Send + Sync + 'a>>;
 }
 
 pub struct Request {

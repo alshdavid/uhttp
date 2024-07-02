@@ -10,7 +10,6 @@ fn main() -> io::Result<()> {
     res.headers().set("Content-Type", "text/html");
     res.write_header(200)?;
 
-
     let body = body_parser::utf8(&mut req.body)?;
     println!("BODY: {}", body);
 

@@ -18,9 +18,7 @@ fn bench_bytes(b: Bencher) {
   let data = generate_test_data(DEFAULT_STR_LENGTH);
   let mut data = data.as_bytes();
 
-  b.bench_local(move || {
-    body_parser::bytes(&mut data)
-  })
+  b.bench_local(move || body_parser::bytes(&mut data))
 }
 
 #[bench]
@@ -28,9 +26,7 @@ fn bench_utf8(b: Bencher) {
   let data = generate_test_data(DEFAULT_STR_LENGTH);
   let mut data = data.as_bytes();
 
-  b.bench_local(move || {
-    body_parser::utf8(&mut data)
-  })
+  b.bench_local(move || body_parser::utf8(&mut data))
 }
 
 #[bench]
@@ -38,7 +34,5 @@ fn bench_utf8_unchecked(b: Bencher) {
   let data = generate_test_data(DEFAULT_STR_LENGTH);
   let mut data = data.as_bytes();
 
-  b.bench_local(move || {
-    unsafe { body_parser::utf8_unchecked(&mut data) }
-  })
+  b.bench_local(move || unsafe { body_parser::utf8_unchecked(&mut data) })
 }

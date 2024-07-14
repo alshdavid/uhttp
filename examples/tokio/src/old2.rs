@@ -1,7 +1,11 @@
 use std::convert::Infallible;
 use std::net::SocketAddr;
 
+use futures::TryStreamExt;
+use http_body_util::combinators::BoxBody;
+use http_body_util::BodyExt;
 use http_body_util::Full;
+use http_body_util::StreamBody;
 use hyper::body::Bytes;
 use hyper::body::Incoming;
 use hyper::server::conn::http1;
@@ -9,6 +13,7 @@ use hyper::service::service_fn;
 use hyper::Request;
 use hyper::Response;
 use hyper_util::rt::TokioIo;
+use tokio::io::AsyncWriteExt;
 use tokio::net::TcpListener;
 
 fn main() {
@@ -35,6 +40,23 @@ fn main() {
     });
 }
 
-async fn root(_request: Request<Incoming>) -> Result<Response<Full<Bytes>>, Infallible> {
-  Ok(Response::new(Full::new(Bytes::from("Hello, World!"))))
+async fn root(_request: Request<Incoming>) -> Result<Response<BoxBody<Bytes, std::io::Error>>, Infallible> {
+  // Ok(Response::new(Full::new(Bytes::from("Hello, World!"))))
+
+  let (mut writer, reader) = tokio::io::duplex(1024);
+  let reader_stream = tokio_util::io::ReaderStream::new(reader);
+  let stream_body = StreamBody::new(reader_stream.map_ok(hyper::body::Frame::data));
+  let boxed_body = stream_body.boxed();
+
+  let response = hyper::Response::builder()
+    .header("Content-Type", "text/html")
+    .status(hyper::StatusCode::OK)
+    .body(boxed_body)
+    .unwrap();
+
+  tokio::task::spawn(async move {
+    writer.write(b"hello world").await.unwrap();
+  });
+
+  Ok(response)
 }

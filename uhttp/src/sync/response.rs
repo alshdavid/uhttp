@@ -5,31 +5,36 @@ use std::net::TcpStream;
 
 use crate::Headers;
 
-pub trait Response: Write + Send + Sync {
-  fn headers(&mut self) -> &mut Headers;
-  fn write_header(
-    &mut self,
-    status_code: usize,
-  ) -> io::Result<()>;
-  fn end(&mut self) -> io::Result<()>;
-}
-
-pub struct HttpResponse {
+pub struct Response {
   pub(super) headers: Headers,
   pub(super) stream: TcpStream,
+  pub (super) alive: bool
 }
 
-impl Response for HttpResponse {
-  fn headers(&mut self) -> &mut Headers {
+impl Response {
+  pub fn new(
+    headers: Headers,
+    stream: TcpStream,
+  ) -> Self {
+    Self { 
+      headers,
+      stream,
+      alive: true,
+    }
+  }
+  pub fn headers(&mut self) -> &mut Headers {
     &mut self.headers
   }
 
-  fn end(&mut self) -> io::Result<()> {
+  pub fn end(&mut self) -> io::Result<()> {
+    if !self.alive {
+      return Ok(());
+    }
     self.stream.flush()?;
     self.stream.shutdown(Shutdown::Both)
   }
 
-  fn write_header(
+  pub fn write_header(
     &mut self,
     status_code: usize,
   ) -> io::Result<()> {
@@ -61,7 +66,7 @@ impl Response for HttpResponse {
   }
 }
 
-impl Write for HttpResponse {
+impl Write for Response {
   fn write(
     &mut self,
     buf: &[u8],
@@ -72,4 +77,10 @@ impl Write for HttpResponse {
   fn flush(&mut self) -> io::Result<()> {
     self.stream.flush()
   }
+}
+
+impl Drop for Response {
+    fn drop(&mut self) {
+      self.end().unwrap();
+    }
 }

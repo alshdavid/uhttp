@@ -17,7 +17,7 @@ fn main() -> io::Result<()> {
     Ok(())
   });
 
-  server.listen("0.0.0.0:3000")?;
+  server.listen("0.0.0.0:8080")?;
 
   Ok(())
 }

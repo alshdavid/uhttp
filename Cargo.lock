@@ -1456,6 +1456,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "uhttp_example_hyper_mt"
+version = "0.1.0"
+dependencies = [
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "num_cpus",
+ "tokio",
+]
+
+[[package]]
+name = "uhttp_example_hyper_st"
+version = "0.1.0"
+dependencies = [
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "tokio",
+]
+
+[[package]]
 name = "uhttp_example_sync"
 version = "0.1.0"
 dependencies = [

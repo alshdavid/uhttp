@@ -5,8 +5,10 @@ members = [
   "./uhttp",
   "./examples/*",
   "./benchmarks/actix",
-  "./benchmarks/tokio",
-  "./benchmarks/sync",
+  "./benchmarks/uhttp_tokio",
+  "./benchmarks/uhttp_sync",
+  "./benchmarks/hyper_mt",
+  "./benchmarks/hyper_st",
 ]
 
 [profile.release]

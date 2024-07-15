@@ -1,0 +1,7 @@
+{
+  "name": "uhhtp_benchmark_nodejs",
+  "type": "module",
+  "dependencies": {
+    "uWebSockets.js": "github:uNetworking/uWebSockets.js#v20.44.0"
+  }
+}

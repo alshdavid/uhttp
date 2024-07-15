@@ -326,8 +326,9 @@ dependencies = [
 name = "benchmark_uhttp_tokio"
 version = "0.1.0"
 dependencies = [
- "tokio",
- "uhttp",
+ "bytes 0.4.12",
+ "httparse",
+ "memchr",
 ]
 
 [[package]]
@@ -2180,9 +2181,11 @@ checksum = "42ff0bf0c66b8238c6f3b578df37d0b7848e55df8577b3f74f92a69acceeb825"
 name = "uhttp"
 version = "0.1.0"
 dependencies = [
+ "bytes 0.4.12",
  "divan",
  "futures 0.3.30",
  "httparse",
+ "itoa",
  "tokio",
  "tokio-util",
 ]

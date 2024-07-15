@@ -4,6 +4,8 @@ use bytes::BytesMut;
 
 use httparse;
 
+pub(crate) const MAX_HEADERS: usize = 16;
+
 pub struct Request {
     method: Slice,
     path: Slice,
@@ -57,14 +59,20 @@ pub fn decode(buf: &mut BytesMut) -> io::Result<Option<Request>> {
     let (method, path, version, headers, amt) = {
         let mut headers = [httparse::EMPTY_HEADER; 16];
         let mut r = httparse::Request::new(&mut headers);
+
         let status = r.parse(buf).map_err(|e| {
             let msg = format!("failed to parse http request: {:?}", e);
             io::Error::new(io::ErrorKind::Other, msg)
         })?;
 
+        println!("{:?}", buf);
+
         let amt = match status {
             httparse::Status::Complete(amt) => amt,
-            httparse::Status::Partial => return Ok(None),
+            httparse::Status::Partial => {
+              println!("partial");
+              return Ok(None)
+            },
         };
 
         let toslice = |a: &[u8]| {

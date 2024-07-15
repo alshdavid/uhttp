@@ -1,7 +1,7 @@
 use std::io;
 use std::io::Write;
 
-use uhttp::sync::body_parser;
+// use uhttp::sync::body_parser;
 use uhttp::sync::Server;
 
 fn main() -> io::Result<()> {
@@ -10,8 +10,8 @@ fn main() -> io::Result<()> {
     res.headers().set("Content-Type", "text/html");
     res.write_header(200)?;
 
-    let body = body_parser::utf8(&mut req.body)?;
-    println!("BODY: {}", body);
+    // let body = body_parser::utf8(&mut req.body)?;
+    // println!("BODY: {}", body);
 
     write!(res, "<body>Hello world</body>")?;
     Ok(())

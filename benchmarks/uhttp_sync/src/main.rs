@@ -1,16 +1,17 @@
 use std::io;
 use std::io::Write;
 
-use uhttp::sync::{body_parser, Server};
+use uhttp::sync::Server;
 
 fn main() -> io::Result<()> {
-  let server = Server::new(|mut req, mut res| {
+  let server = Server::new(|_req, mut res| {
+    let data = b"hello world";
     res.headers().set("Content-Type", "text/plain");
+    res.headers().set("Content-Length", format!("{}", data.len()));
     res.write_header(200)?;
 
-    // body_parser::utf8(&mut req.body)?;
-    res.write_all(b"Hello, World!")?;
-
+    res.write_all(data)?;
+    res.end()?;
     Ok(())
   });
 

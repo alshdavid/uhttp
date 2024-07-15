@@ -1,7 +1,10 @@
 use std::io;
 use std::io::Read;
 use std::net::TcpListener;
+use std::net::TcpStream;
 use std::net::ToSocketAddrs;
+use std::sync::mpsc::channel;
+use std::sync::mpsc::Sender;
 use std::sync::Arc;
 use std::thread;
 
@@ -36,90 +39,107 @@ where
   ) -> io::Result<()> {
     let listener = TcpListener::bind(addr)?;
 
-    while let Ok((mut stream, _)) = listener.accept() {
+    let mut senders = Vec::<Sender<TcpStream>>::new();
+
+    for _ in 0..1000 {
+      let (tx, rx) = channel();
+      senders.push(tx);
       let handler = self.handler.clone();
 
       thread::spawn(move || -> io::Result<()> {
-        let mut header_bytes = Vec::<u8>::new();
-        let mut header_count = 0;
+        while let Ok(mut stream) = rx.recv() {
+          let mut header_bytes = Vec::<u8>::new();
+          let mut header_count = 0;
 
-        let mut buf = [0u8; 1];
+          let mut buf = [0u8; 1];
 
-        let mut rc1 = false;
-        let mut nl1 = false;
-        let mut rc2 = false;
+          let mut rc1 = false;
+          let mut nl1 = false;
+          let mut rc2 = false;
 
-        loop {
-          stream.read(&mut buf)?;
-          let v = buf[0];
+          loop {
+            stream.read(&mut buf)?;
+            let v = buf[0];
 
-          if rc1 == false && v == RC {
-            rc1 = true;
-          } else if rc1 == true && nl1 == false && v == NL {
-            nl1 = true;
-            header_count += 1;
-          } else if rc1 == true && nl1 == true && rc2 == false && v == RC {
-            rc2 = true;
-          } else if rc1 == true && nl1 == true && rc2 == true && v == NL {
-            break;
-          } else {
-            rc1 = false;
-            nl1 = false;
-            rc2 = false;
+            if rc1 == false && v == RC {
+              rc1 = true;
+            } else if rc1 == true && nl1 == false && v == NL {
+              nl1 = true;
+              header_count += 1;
+            } else if rc1 == true && nl1 == true && rc2 == false && v == RC {
+              rc2 = true;
+            } else if rc1 == true && nl1 == true && rc2 == true && v == NL {
+              break;
+            } else {
+              rc1 = false;
+              nl1 = false;
+              rc2 = false;
+            }
+
+            header_bytes.push(buf[0]);
           }
 
-          header_bytes.push(buf[0]);
-        }
+          let mut raw_headers = vec![httparse::EMPTY_HEADER; header_count - 1];
+          let mut raw_headers_parser = httparse::Request::new(&mut raw_headers);
 
-        let mut raw_headers = vec![httparse::EMPTY_HEADER; header_count - 1];
-        let mut raw_headers_parser = httparse::Request::new(&mut raw_headers);
+          raw_headers_parser
+            .parse(&header_bytes)
+            .map_err(|e| io::Error::other(e))?;
 
-        raw_headers_parser
-          .parse(&header_bytes)
-          .map_err(|e| io::Error::other(e))?;
+          let req_version = raw_headers_parser.version.unwrap_or(0);
+          let method = raw_headers_parser
+            .method
+            .unwrap_or(DEFAULT_METHOD)
+            .to_string();
+          let url = raw_headers_parser.path.unwrap_or(DEFAULT_URL).to_string();
+          let host = unsafe { String::from_utf8_unchecked(raw_headers[0].value.to_owned()) };
 
-        let req_version = raw_headers_parser.version.unwrap_or(0);
-        let method = raw_headers_parser
-          .method
-          .unwrap_or(DEFAULT_METHOD)
-          .to_string();
-        let url = raw_headers_parser.path.unwrap_or(DEFAULT_URL).to_string();
-        let host = unsafe { String::from_utf8_unchecked(raw_headers[0].value.to_owned()) };
+          let mut headers = Headers::default();
+          let mut content_length: usize = 0;
 
-        let mut headers = Headers::default();
-        let mut content_length: usize = 0;
+          for header in raw_headers.drain(0..) {
+            let key = header.name.to_string().to_lowercase();
 
-        for header in raw_headers.drain(0..) {
-          let key = header.name.to_string().to_lowercase();
+            let values = unsafe { String::from_utf8_unchecked(header.value.to_owned()) };
 
-          let values = unsafe { String::from_utf8_unchecked(header.value.to_owned()) };
+            if key == HEADER_CONTENT_LENGTH {
+              content_length = values.parse::<usize>().unwrap();
+            }
 
-          if key == HEADER_CONTENT_LENGTH {
-            content_length = values.parse::<usize>().unwrap();
+            headers.set(key, values)
           }
 
-          headers.set(key, values)
+          let request = Request {
+            method,
+            url,
+            proto: format!("HTTP/1.{}", req_version),
+            headers,
+            host,
+            body: Box::new(HttpRequestReader {
+              content_length,
+              cursor: 0,
+              stream: stream.try_clone()?,
+            }),
+          };
+
+          let response = Response::new(Default::default(), stream);
+
+          handler(request, response)?;
         }
-
-        let request = Request {
-          method,
-          url,
-          proto: format!("HTTP/1.{}", req_version),
-          headers,
-          host,
-          body: Box::new(HttpRequestReader {
-            content_length,
-            cursor: 0,
-            stream: stream.try_clone()?,
-          }),
-        };
-
-        let response = Response::new(Default::default(), stream);
-
-        handler(request, response)?;
 
         Ok(())
       });
+    }
+
+    let mut current = 0;
+
+    while let Ok((stream, _)) = listener.accept() {
+      senders[current].send(stream).unwrap();
+      if current == senders.len() - 1 {
+        current = 0;
+      } else {
+        current += 1;
+      }
     }
     Ok(())
   }

@@ -8,7 +8,12 @@ members = [
   "./benchmarks/uhttp_tokio",
   "./benchmarks/uhttp_sync",
   "./benchmarks/hyper_mt",
+  "./benchmarks/hyper_stream",
   "./benchmarks/hyper_st",
+  "./benchmarks/tokio_minihttp",
+  "./benchmarks/tiny_http",
+  "./benchmarks/rouille",
+  "./benchmarks/may_minihttp",
 ]
 
 [profile.release]

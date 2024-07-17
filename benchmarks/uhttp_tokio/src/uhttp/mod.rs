@@ -9,13 +9,13 @@
 // use tokio_service;
 
 // mod date;
-pub mod request;
-pub mod response;
+// pub mod request;
+// pub mod response;
 
 // use std::io;
 
-pub use request::Request;
-pub use response::Response;
+// pub use request::Request;
+// pub use response::Response;
 
 // use bytes::BytesMut;
 // use tokio_io::codec::{Encoder, Decoder, Framed};

@@ -1,25 +1,39 @@
 package main
 
 import (
-    "fmt"
-    "net/http"
+	"fmt"
+	"net/http"
+	"time"
 )
 
-func hello(w http.ResponseWriter, req *http.Request) {
-  fmt.Fprintf(w, "Hello World\n")
+func root(w http.ResponseWriter, req *http.Request) {
+	flusher := w.(http.Flusher)
+	body := []byte("Hello World!")
+
+	w.Header().Add("Content-Type", "text/html")
+	w.Header().Add("Content-Length", fmt.Sprintf("%d", len(body)))
+	w.Write(body)
+	flusher.Flush()
 }
 
-func headers(w http.ResponseWriter, req *http.Request) {
+func chunked(w http.ResponseWriter, req *http.Request) {
+	flusher := w.(http.Flusher)
 
-    for name, headers := range req.Header {
-        for _, h := range headers {
-            fmt.Fprintf(w, "%v: %v\n", name, h)
-        }
-    }
+	w.Header().Add("Content-Type", "text/html")
+	w.Header().Add("Transfer-Encoding", "chunked")
+	flusher.Flush()
+
+	for i := 0; i < 10; i++ {
+		fmt.Fprintf(w, "%d\n", i)
+		fmt.Println(i)
+		flusher.Flush()
+		time.Sleep(time.Second * 1)
+	}
 }
 
 func main() {
-  http.HandleFunc("/", hello)
+	http.HandleFunc("/", root)
+	http.HandleFunc("/chunked", chunked)
 
-  http.ListenAndServe(":8080", nil)
+	http.ListenAndServe(":8080", nil)
 }

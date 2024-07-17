@@ -6,4 +6,10 @@ edition = "2021"
 [dependencies]
 httparse = "1"
 bytes = "*"
+futures = "0.3"
 memchr = "*"
+mio = { version = "1", features = ["os-poll", "net"] }
+may = "*"
+async-std = "1.12.0"
+tokio = { version = "*", features = ["full"] }
+once_cell = "*"

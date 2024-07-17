@@ -43,34 +43,34 @@ impl Response {
     }
 }
 
-pub fn encode(msg: Response, buf: &mut BytesMut) {
-    let length = msg.response.len();
-    // let now = super::date::now();
+// pub fn encode(msg: Response, buf: &mut BytesMut) {
+//     let length = msg.response.len();
+//     // let now = super::date::now();
 
-    write!(FastWrite(buf), "\
-        HTTP/1.1 {}\r\n\
-        Server: Example\r\n\
-        Content-Length: {}\r\n\
-    ", msg.status_message, length).unwrap();
+//     write!(FastWrite(buf), "\
+//         HTTP/1.1 {}\r\n\
+//         Server: Example\r\n\
+//         Content-Length: {}\r\n\
+//     ", msg.status_message, length).unwrap();
 
-    for &(ref k, ref v) in &msg.headers {
-        push(buf, k.as_bytes());
-        push(buf, ": ".as_bytes());
-        push(buf, v.as_bytes());
-        push(buf, "\r\n".as_bytes());
-    }
+//     for &(ref k, ref v) in &msg.headers {
+//         push(buf, k.as_bytes());
+//         push(buf, ": ".as_bytes());
+//         push(buf, v.as_bytes());
+//         push(buf, "\r\n".as_bytes());
+//     }
 
-    push(buf, "\r\n".as_bytes());
-    push(buf, msg.response.as_slice());
-}
+//     push(buf, "\r\n".as_bytes());
+//     push(buf, msg.response.as_slice());
+// }
 
-fn push(buf: &mut BytesMut, data: &[u8]) {
-    buf.reserve(data.len());
-    unsafe {
-        buf.bytes_mut()[..data.len()].copy_from_slice(data);
-        buf.advance_mut(data.len());
-    }
-}
+// fn push(buf: &mut BytesMut, data: &[u8]) {
+//     buf.reserve(data.len());
+//     unsafe {
+//         buf.bytes_mut()[..data.len()].copy_from_slice(data);
+//         buf.advance_mut(data.len());
+//     }
+// }
 
 // TODO: impl fmt::Write for Vec<u8>
 //

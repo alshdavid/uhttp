@@ -1,40 +1,24 @@
-use std::convert::Infallible;
-use std::net::SocketAddr;
+use std::sync::{atomic::{AtomicUsize, Ordering}, Arc};
 
-use http_body_util::Full;
-use hyper::body::Bytes;
-use hyper::body::Incoming;
-use hyper::server::conn::http1;
-use hyper::service::service_fn;
-use hyper::Request;
-use hyper::Response;
-use hyper_util::rt::TokioIo;
-use tokio::net::TcpListener;
+use http::header::CONTENT_TYPE;
+use server::{HttpServer, Request, Response};
 
-fn main() {
-  tokio::runtime::Builder::new_multi_thread()
-    .enable_all()
-    .worker_threads(num_cpus::get_physical())
-    .build()
-    .unwrap()
-    .block_on(async {
-      let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
-      let listener = TcpListener::bind(addr).await.unwrap();
+#[macro_use]
+extern crate log;
 
-      loop {
-        let (stream, _) = listener.accept().await.unwrap();
-        let io = TokioIo::new(stream);
+mod buffer;
+mod date;
 
-        tokio::task::spawn(async move {
-          http1::Builder::new()
-            .serve_connection(io, service_fn(root))
-            .await
-            .unwrap();
-        });
-      }
-    });
+pub mod body;
+pub mod server;
+
+
+fn hello(_req: Request, res: &mut Response) {
+  res.headers_mut().append(CONTENT_TYPE, "text/plain; charset=utf-8".parse().unwrap());
+  res.send(b"Hello World!").unwrap();
 }
 
-async fn root(_request: Request<Incoming>) -> Result<Response<Full<Bytes>>, Infallible> {
-  Ok(Response::new(Full::new(Bytes::from("Hello, World!"))))
+fn main() {
+  let server = HttpServer::new(hello).start("127.0.0.1:8080").unwrap();
+  server.wait();
 }

@@ -6,9 +6,7 @@ struct HelloWorld;
 
 impl HttpService for HelloWorld {
     fn call(&mut self, _req: Request, rsp: &mut Response) -> io::Result<()> {
-        rsp.body("Hello");
-        thread::sleep(Duration::from_millis(500));
-        rsp.body(" world");
+        rsp.body("Hello world");
         Ok(())
     }
 }

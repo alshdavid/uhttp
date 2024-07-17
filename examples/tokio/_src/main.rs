@@ -36,5 +36,5 @@ fn main() {
 }
 
 async fn root(_request: Request<Incoming>) -> Result<Response<Full<Bytes>>, Infallible> {
-  Ok(Response::new(Full::new(Bytes::from("Hello, World!\n"))))
+  Ok(Response::new(Full::new(Bytes::from("Hello, World!"))))
 }

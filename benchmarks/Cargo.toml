@@ -1,7 +1,17 @@
 [workspace]
 resolver = "2"
 
-members = ["./uhttp", "./examples/*"]
+members = [
+  "./actix",
+  "./uhttp",
+  "./hyper_mt",
+  "./hyper_stream",
+  "./hyper_st",
+  "./tokio_minihttp",
+  "./tiny_http",
+  "./rouille",
+  "./may_minihttp",
+]
 
 [profile.release]
 opt-level = 3

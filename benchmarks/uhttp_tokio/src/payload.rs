@@ -13,13 +13,16 @@ pub const HEADERS: Lazy<Vec<(&str, &str)>> = Lazy::new(|| {
 
 pub const DATA: Lazy<Vec<u8>> = Lazy::new(|| {
   let mut headers = String::new();
-  
+
   headers.push_str("HTTP/1.1 200 OK\r\n");
-  
-  headers.push_str(&HEADERS.iter()
-    .map(|v| format!("{}: {}", v.0, v.1))
-    .collect::<Vec<String>>()
-    .join("\r\n"));
+
+  headers.push_str(
+    &HEADERS
+      .iter()
+      .map(|v| format!("{}: {}", v.0, v.1))
+      .collect::<Vec<String>>()
+      .join("\r\n"),
+  );
 
   headers.push_str("\r\nContent-Length: ");
   headers.push_str(&PAYLOAD.as_bytes().len().to_string());
@@ -27,6 +30,29 @@ pub const DATA: Lazy<Vec<u8>> = Lazy::new(|| {
 
   headers.push_str("\r\n");
   headers.push_str(&PAYLOAD);
-  
+
   headers.as_bytes().to_vec()
 });
+
+pub fn create_response(data: Vec<u8>) -> Vec<u8> {
+  let mut headers = String::new();
+
+  headers.push_str("HTTP/1.1 200 OK\r\n");
+
+  headers.push_str(
+    &HEADERS
+      .iter()
+      .map(|v| format!("{}: {}", v.0, v.1))
+      .collect::<Vec<String>>()
+      .join("\r\n"),
+  );
+
+  headers.push_str("\r\nContent-Length: ");
+  headers.push_str(&data.len().to_string());
+  headers.push_str("\r\n");
+
+  headers.push_str("\r\n");
+  headers.push_str(&String::from_utf8(data).unwrap());
+
+  headers.as_bytes().to_vec()
+}

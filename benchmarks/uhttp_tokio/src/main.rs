@@ -9,7 +9,9 @@ use std::io::Read;
 use std::io::Write;
 
 use may::net::TcpListener;
+use may::sync::mpsc;
 use may::sync::spsc;
+use payload::create_response;
 use payload::DATA;
 
 use self::constants::{self as c};
@@ -19,16 +21,17 @@ const BUF_SIZE: usize = 512;
 fn handler(
   headers: HashMap<String, Vec<String>>,
   rx_read: spsc::Receiver<Vec<u8>>,
-  tx_write: spsc::Sender<Vec<u8>>,
+  tx_write: mpsc::Sender<Vec<u8>>,
 ) {
   let mut b = vec![];
   while let Ok(bytes) = rx_read.recv() {
+    println!("{}", bytes.len());
     b.extend(bytes);
   }
 
-  // println!("{}", String::from_utf8(b).unwrap());
+  println!("{}", String::from_utf8(b.clone()).unwrap());
 
-  tx_write.send(DATA.to_vec()).unwrap()
+  tx_write.send(create_response(b)).unwrap()
 }
 
 fn main() {
@@ -41,15 +44,32 @@ fn main() {
   while let Ok((mut stream, _)) = listener.accept() {
     go!(move || {
       let mut buf = Vec::<u8>::new();
+      let (tx_write, rx_write) = mpsc::channel::<Vec<u8>>();
+
+      go!({
+        let mut stream = stream.try_clone().unwrap();
+        move || {
+          while let Ok(bytes) = rx_write.recv() {
+            stream.write_all(&bytes).unwrap();
+          }
+        }
+      });
 
       let mut header_count = 0;
       let mut body_start = 0;
-      let mut content_length = 0;
       let mut rc0 = false;
       let mut nl0 = false;
       let mut rc1 = false;
 
       loop {
+        // println!(
+        //   "buf {} header_count {} body_start {} content_length {}",
+        //   buf.len(),
+        //   header_count,
+        //   body_start,
+        //   content_length
+        // );
+
         let mut temp_buf = vec![0; BUF_SIZE];
         match stream.read(&mut temp_buf) {
           Ok(n) => {
@@ -85,9 +105,11 @@ fn main() {
           continue;
         }
 
+        println!("---\n{}\n---", String::from_utf8(buf.clone()).unwrap());
+        let header_bytes = buf.drain(0..body_start).collect::<Vec<u8>>();
         let mut raw_headers = vec![httparse::EMPTY_HEADER; header_count - 1];
         let mut raw_request = httparse::Request::new(&mut raw_headers);
-        raw_request.parse(&buf).unwrap();
+        raw_request.parse(&header_bytes).unwrap();
 
         let mut headers = HashMap::<String, Vec<String>>::new();
         for i in 0..raw_request.headers.len() {
@@ -95,77 +117,56 @@ fn main() {
           let header_name = header.name.to_string();
           let header_value = std::mem::take(&mut header.value).to_owned();
           let header_value = unsafe { String::from_utf8_unchecked(header_value) };
-          headers.entry(header_name).or_default().push(header_value);
+          headers
+            .entry(header_name.to_lowercase())
+            .or_default()
+            .push(header_value);
         }
 
-        let Some(method) = raw_request.method else {
-          panic!("No method");
-        };
+        let mut content_length = 0;
 
         if let Some(v) = headers.get(c::headers::CONTENT_LENGTH) {
           content_length = v.get(0).unwrap().parse::<usize>().unwrap();
-        } else {
-          content_length = 0;
         }
 
         let (tx_read, rx_read) = spsc::channel::<Vec<u8>>();
-        let (tx_write, rx_write) = spsc::channel::<Vec<u8>>();
 
-        go!(move || {
-          handler(headers, rx_read, tx_write);
-        });
-
-        go!({
-          let mut stream = stream.try_clone().unwrap();
+        let handle = go!({
+          let tx_write = tx_write.clone();
           move || {
-            while let Ok(bytes) = rx_write.recv() {
-              stream.write_all(&bytes).unwrap();
-            }
+            handler(headers, rx_read, tx_write);
           }
         });
 
-        if method == c::methods::GET {
+        let mut bytes_read = 0;
+
+        if content_length == 0 {
           drop(tx_read);
-          body_start = 0;
           header_count = 0;
-          content_length = 0;
-          buf.clear();
+          body_start = 0;
+          handle.join().unwrap();
           continue;
         }
 
-        buf = buf.split_off(body_start);
-        let mut bytes_read = 0;
-
         loop {
-          if bytes_read >= content_length {
-            let bytes = buf
-              .drain(0..content_length - bytes_read)
-              .collect::<Vec<u8>>();
-            tx_read.send(bytes).unwrap();
-            drop(tx_read);
-            body_start = 0;
-            header_count = 0;
-            content_length = 0;
-            break;
-          } else if buf.len() > 0 && bytes_read <= content_length {
-            let bytes = buf.drain(0..).collect::<Vec<u8>>();
+          let bytes = buf
+            .drain(0..(content_length - bytes_read))
+            .collect::<Vec<u8>>();
+
+          if bytes.len() > 0 {
             bytes_read += bytes.len();
             tx_read.send(bytes).unwrap();
-            continue;
           }
 
-          let mut temp_buf = vec![0; BUF_SIZE];
-          match stream.read(&mut temp_buf) {
-            Ok(n) => {
-              if n == 0 {
-                break;
-              }
-
-              buf.extend(temp_buf.drain(0..n));
-            }
-            Err(err) => println!("err = {err:?}"),
+          if bytes_read == content_length {
+            drop(tx_read);
+            header_count = 0;
+            body_start = 0;
+            break;
           }
         }
+
+        handle.join().unwrap();
       }
     });
   }

@@ -1,7 +1,11 @@
 [package]
 name = "uhttp"
-version = "0.1.0"
+version = "0.1.3"
 edition = "2021"
+description = "Rust HTTP Server Library for Humans"
+license = "MIT"
+homepage = "https://github.com/alshdavid/uhttp"
+repository = "https://github.com/alshdavid/uhttp"
 
 [lib]
 name = "uhttp"
@@ -13,8 +17,8 @@ path = "src/bench.rs"
 
 [dependencies]
 httparse = "1"
-bytes = "*"
-may = "*"
+bytes = "1"
+may = "0.3"
 
 
 [dev-dependencies]

@@ -1,7 +1,7 @@
 use std::io;
 use std::io::Write;
 
-use uhttp::http_1::*;
+use uhttp::http1::*;
 use uhttp::*;
 
 fn main() -> io::Result<()> {
@@ -13,7 +13,6 @@ fn handler(
   mut res: Response,
 ) -> io::Result<()> {
   res.header("Content-Type", "text/plain");
-
   res.write(b"Hello World!")?;
   res.write_header(200)
 }

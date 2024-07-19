@@ -6,6 +6,8 @@ use std::io::Write;
 use crate::Headers;
 
 pub struct Response {
+  head: Option<Vec<String>>,
+  body_buf: Vec<u8>,
   headers: Headers,
   response_writer: Box<dyn Write + Send>,
 }
@@ -13,6 +15,8 @@ pub struct Response {
 impl Response {
   pub fn new<T: Write + Send + 'static>(response_writer: T) -> Self {
     Self {
+      head: Default::default(),
+      body_buf: Default::default(),
       headers: Default::default(),
       response_writer: Box::new(response_writer),
     }
@@ -50,31 +54,26 @@ impl Response {
     &mut self,
     status_code: usize,
   ) -> io::Result<()> {
-    let response_code = format!("{}", status_code);
-    let response_message = "OK";
-
-    let mut message = Vec::<u8>::new();
-
-    message.extend(b"HTTP/1.1 ");
-    message.extend(response_code.as_bytes());
-    message.extend(b" ");
-
-    message.extend(response_message.as_bytes());
-    message.extend(b"\r\n");
+    let mut head = vec![];
+    head.push(format!("HTTP/1.1 {status_code} OK"));
 
     for (key, values) in self.headers.iter() {
-      message.extend(key.as_bytes());
-      message.extend(b": ");
-
-      for value in values.iter() {
-        message.extend(value.as_bytes());
-        message.extend(b"\r\n");
-      }
+      head.push(format!("{}: {}", key, values.join(", ")));
     }
 
-    message.extend(b"\r\n");
-    self.response_writer.write_all(&message)?;
+    self.head = Some(head);
+    Ok(())
+  }
 
+  fn transfer(&mut self) -> io::Result<()> {
+    let message = self.head.take().unwrap();
+    let mut message = message.join("\r\n");
+    message.push_str("\r\n");
+    message.push_str(&format!("Content-Length: {}\r\n", self.body_buf.len()));
+    message.push_str("\r\n");
+    let mut message = message.as_bytes().to_vec();
+    message.extend(self.body_buf.drain(0..));
+    self.response_writer.write_all(&message)?;
     Ok(())
   }
 }
@@ -104,7 +103,9 @@ impl Write for Response {
     &mut self,
     buf: &[u8],
   ) -> io::Result<usize> {
-    self.response_writer.write(buf)
+    self.body_buf.extend(buf);
+    Ok(buf.len())
+    // self.response_writer.write(buf)
   }
 
   /// Write writes the data to the connection as part of an HTTP reply.
@@ -131,7 +132,8 @@ impl Write for Response {
     &mut self,
     buf: &[u8],
   ) -> io::Result<()> {
-    self.response_writer.write_all(buf)
+    self.body_buf.extend(buf);
+    Ok(())
   }
 
   fn flush(&mut self) -> io::Result<()> {
@@ -141,6 +143,6 @@ impl Write for Response {
 
 impl Drop for Response {
   fn drop(&mut self) {
-    self.response_writer.flush().ok();
+    self.transfer().ok();
   }
 }

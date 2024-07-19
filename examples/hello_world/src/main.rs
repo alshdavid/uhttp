@@ -2,7 +2,7 @@ use std::io;
 use std::io::Write;
 
 use uhttp::c;
-use uhttp::http_1::*;
+use uhttp::http1::*;
 use uhttp::*;
 
 fn main() -> io::Result<()> {

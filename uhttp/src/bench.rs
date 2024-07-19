@@ -1,6 +1,6 @@
 pub mod constants;
 pub mod headers;
-pub mod http_1;
+pub mod http1;
 pub mod request;
 pub mod response;
 pub mod utils;

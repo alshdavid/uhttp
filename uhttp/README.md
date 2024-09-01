@@ -16,6 +16,27 @@ Available on [crates.io](https://crates.io/crates/uhttp), install with:
 cargo add uhttp
 ```
 
+## Benchmarks
+
+Running on my desktop PC with a 7950x
+
+```
+oha -n 500000 -c 500 --latency-correction http://localhost:8080
+```
+
+```mermaid
+---
+config:
+  xyChart:
+    showTick: true
+---
+xychart-beta
+    title "Requests Per Second"
+    x-axis ["hyper", "uhttp", "Go HTTP", "Node.js (uws library)", "Node.js (std)"]
+    y-axis "Requests Per Second" 0 --> 500000
+    bar [497432, 493671, 412250, 140929, 79966]
+```
+
 # Usage
 
 ## Get Request
@@ -24,6 +45,7 @@ cargo add uhttp
 use std::io;
 
 use uhttp::http1::Server;
+use uhttp::HttpWriter;
 use uhttp::Request;
 use uhttp::Response;
 
@@ -32,8 +54,8 @@ async fn main() -> io::Result<()> {
   Server::new(handler).listen("0.0.0.0:8080").await
 }
 
-async fn handler(mut req: Request, mut res: Response) -> io::Result<()> {
-  res.write_all(b"Hello World!").await;
+async fn handler(mut _req: Request, mut res: Response) -> io::Result<()> {
+  res.write_all(b"Hello World!").await?;
   res.write_header(200).await
 }
 ```
@@ -53,7 +75,7 @@ async fn main() -> io::Result<()> {
 }
 
 async fn handler(mut req: Request, mut res: Response) -> io::Result<()> {
-  let body_text = uhttp::utils::body::utf8(&mut req.body).await?;
+  let body_text = uhttp::utils::body::utf8(&mut req).await?;
   println!("{}", body_text);
 
   res.write_header(201).await
@@ -70,6 +92,7 @@ _TODO: Adding a basic router_
 use std::io;
 
 use uhttp::http1::Server;
+use uhttp::HttpWriter;
 use uhttp::Request;
 use uhttp::Response;
 
@@ -80,12 +103,12 @@ async fn main() -> io::Result<()> {
 
 async fn handler(mut req: Request, mut res: Response) -> io::Result<()> {
   if req.method == "GET" && req.url == "/" {
-    return res.write_all("Hello World!").await
+    return res.write_all(b"Hello World!").await
   }
 
   if req.method == "POST" && req.url == "/api/echo" {
-    let bytes = body::bytes(&mut req.body).await?;
-    return res.write_all(bytes).await
+    let bytes = uhttp::utils::body::bytes(&mut req).await?;
+    return res.write_all(&bytes).await
   }
 
   res.write_header(404).await
@@ -96,21 +119,26 @@ async fn handler(mut req: Request, mut res: Response) -> io::Result<()> {
 
 ```rust
 use std::io;
+use std::path::PathBuf;
 
 use tokio::fs;
 
 use uhttp::http1::Server;
+use uhttp::HttpWriter;
 use uhttp::Request;
 use uhttp::Response;
+
+const CARGO_HOME: &str = env!("CARGO_MANIFEST_DIR");
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
   Server::new(handler).listen("0.0.0.0:8080").await
 }
 
-fn handler(req: Request, mut res: Response) -> io::Result<()> {
-  let bytes = fs::read("/path/to/index.html").await?;
-  res.write_all(bytes).await;
+async fn handler(_req: Request, mut res: Response) -> io::Result<()> {
+  let index_file = PathBuf::from(CARGO_HOME).join("index.html");
+  let bytes = fs::read(&index_file).await?;
+  res.write_all(&bytes).await?;
   res.write_header(200).await
 }
 ```

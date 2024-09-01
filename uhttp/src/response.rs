@@ -20,7 +20,7 @@ pub struct Response {
 }
 
 impl Response {
-  pub fn write_header(
+  pub async fn write_header(
     &mut self,
     status_code: usize,
   ) -> io::Result<()> {

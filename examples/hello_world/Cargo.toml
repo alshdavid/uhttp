@@ -5,3 +5,4 @@ edition = "2021"
 
 [dependencies]
 uhttp = { path = "../../uhttp" }
+tokio = { version = "*", features = ["full"] }

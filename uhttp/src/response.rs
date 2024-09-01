@@ -1,55 +1,25 @@
 // TODO rewrite the Go docs below and implement the approach
 
 use std::io;
-use std::io::Write;
+
+use tokio::sync::mpsc::UnboundedSender;
 
 use crate::Headers;
 
+#[async_trait::async_trait]
+pub trait HttpWriter: Send + Sync {
+  async fn write(&mut self, buf: &[u8]) -> io::Result<usize>;
+  async fn write_all(&mut self, buf: &[u8]) -> io::Result<()>;
+  async fn flush(&mut self) -> io::Result<()>;
+}
 pub struct Response {
-  head: Option<Vec<String>>,
-  body_buf: Vec<u8>,
-  headers: Headers,
-  response_writer: Box<dyn Write + Send>,
+  pub (crate) head: Option<Vec<String>>,
+  pub (crate) body_buf: Vec<u8>,
+  pub (crate) headers: Headers,
+  pub (crate) writer: UnboundedSender<Vec<u8>>,
 }
 
 impl Response {
-  pub fn new<T: Write + Send + 'static>(response_writer: T) -> Self {
-    Self {
-      head: Default::default(),
-      body_buf: Default::default(),
-      headers: Default::default(),
-      response_writer: Box::new(response_writer),
-    }
-  }
-  pub fn headers(&mut self) -> &mut Headers {
-    &mut self.headers
-  }
-
-  pub fn header<K: AsRef<str>, V: AsRef<str>>(
-    &mut self,
-    key: K,
-    value: V,
-  ) {
-    self.headers.set(key, value)
-  }
-
-  /// WriteHeader sends an HTTP response header with the provided status code.
-
-  /// If WriteHeader is not called explicitly, the first call to Write will
-  /// trigger an implicit WriteHeader(http.StatusOK). Thus explicit calls to
-  /// WriteHeader are mainly used to send error codes or 1xx informational
-  /// responses.
-
-  /// The provided code must be a valid HTTP 1xx-5xx status code. Any number
-  /// of 1xx headers may be written, followed by at most one 2xx-5xx header.
-  /// 1xx headers are sent immediately, but 2xx-5xx headers may be buffered.
-  ///
-  /// Use the Flusher interface to send buffered data. The header map is
-  /// cleared when 2xx-5xx headers are sent, but not with 1xx headers.
-
-  /// The server will automatically send a 100 (Continue) header on the first
-  /// read from the request body if the request has an "Expect: 100-continue"
-  /// header.
   pub fn write_header(
     &mut self,
     status_code: usize,
@@ -64,21 +34,18 @@ impl Response {
     self.head = Some(head);
     Ok(())
   }
-
-  fn transfer(&mut self) -> io::Result<()> {
-    let message = self.head.take().unwrap();
-    let mut message = message.join("\r\n");
-    message.push_str("\r\n");
-    message.push_str(&format!("Content-Length: {}\r\n", self.body_buf.len()));
-    message.push_str("\r\n");
-    let mut message = message.as_bytes().to_vec();
-    message.extend(self.body_buf.drain(0..));
-    self.response_writer.write_all(&message)?;
-    Ok(())
+  
+  pub fn header(
+    &mut self,
+    key: &str,
+    value: &str,
+  ) {
+    self.headers.set(key, value)
   }
 }
 
-impl Write for Response {
+#[async_trait::async_trait]
+impl HttpWriter for Response {
   /// Write writes the data to the connection as part of an HTTP reply.
 
   /// If [ResponseWriter.WriteHeader] has not yet been called, Write calls
@@ -99,15 +66,11 @@ impl Write for Response {
   /// while concurrently writing the response. However, such behavior may not be
   /// supported by all HTTP/2 clients. Handlers should read before writing if
   /// possible to maximize compatibility.
-  fn write(
-    &mut self,
-    buf: &[u8],
-  ) -> io::Result<usize> {
+  async fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
     self.body_buf.extend(buf);
     Ok(buf.len())
-    // self.response_writer.write(buf)
   }
-
+  
   /// Write writes the data to the connection as part of an HTTP reply.
 
   /// If [ResponseWriter.WriteHeader] has not yet been called, Write calls
@@ -128,21 +91,31 @@ impl Write for Response {
   /// while concurrently writing the response. However, such behavior may not be
   /// supported by all HTTP/2 clients. Handlers should read before writing if
   /// possible to maximize compatibility.
-  fn write_all(
-    &mut self,
-    buf: &[u8],
-  ) -> io::Result<()> {
+  async fn write_all(&mut self, buf: &[u8]) -> io::Result<()> {
     self.body_buf.extend(buf);
     Ok(())
   }
-
-  fn flush(&mut self) -> io::Result<()> {
-    self.response_writer.flush()
+  
+  async fn flush(&mut self) -> io::Result<()> {
+    todo!()
   }
 }
 
 impl Drop for Response {
-  fn drop(&mut self) {
-    self.transfer().ok();
-  }
+    fn drop(&mut self) {
+      let writer = self.writer.clone();
+      let mut head = std::mem::take(&mut self.head);
+      let mut body_buf = std::mem::take(&mut self.body_buf);
+      
+      tokio::task::spawn(async move {
+        let message = head.take().unwrap();
+        let mut message = message.join("\r\n");
+        message.push_str("\r\n");
+        message.push_str(&format!("Content-Length: {}\r\n", body_buf.len()));
+        message.push_str("\r\n");
+        let mut message = message.as_bytes().to_vec();
+        message.extend(body_buf.drain(0..));
+        writer.send(message).unwrap();
+      });
+    }
 }

@@ -18,7 +18,10 @@ path = "src/bench.rs"
 [dependencies]
 httparse = "1"
 bytes = "1"
-may = "0.3"
+socket2 = "0.5"
+futures = "0.3"
+tokio = { version = "1", features = ["full"] }
+async-trait = "0.1"
 
 
 [dev-dependencies]

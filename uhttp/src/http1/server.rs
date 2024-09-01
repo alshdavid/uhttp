@@ -1,110 +1,84 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::future::Future;
 use std::io;
-use std::io::Read;
-use std::io::Write;
+use std::marker::PhantomData;
+use std::net::SocketAddr;
 use std::net::ToSocketAddrs;
-use std::sync::Arc;
+use std::time::Duration;
 
-use may;
-use may::go;
-use may::net::TcpListener;
-use may::sync::mpmc;
-use may::sync::mpsc;
-use may::sync::spsc;
+use bytes::BufMut;
+use bytes::BytesMut;
+use socket2::Domain;
+use socket2::Socket;
+use socket2::Type;
+use tokio;
+use tokio::io::AsyncReadExt;
+use tokio::io::AsyncWriteExt;
 
-use super::request_reader::RequestReader;
-use super::response_writer::ResponseWriteAction;
-use super::response_writer::ResponseWriter;
 use crate::c;
 use crate::Headers;
 use crate::Request;
 use crate::Response;
 
-pub struct Server<Handler>
+pub struct Server<Handler, Fut>
 where
-  Handler: Fn(Request, Response) -> io::Result<()> + 'static + Sync + Send,
+  Handler: Fn(Request, Response) -> Fut + Send + Copy + 'static,
+  Fut: Future<Output = io::Result<()>> + Send,
 {
-  handler: Arc<Handler>,
+  handler: RefCell<Option<Handler>>,
+  p0: PhantomData<Fut>,
 }
 
-impl<Handler> Server<Handler>
+impl<Handler, Fut> Server<Handler, Fut>
 where
-  Handler: Fn(Request, Response) -> io::Result<()> + 'static + Sync + Send,
+  Handler: Fn(Request, Response) -> Fut + Send + Copy + 'static,
+  Fut: Future<Output = io::Result<()>> + Send,
 {
   pub fn new(handler: Handler) -> Self {
     Self {
-      handler: Arc::new(handler),
+      handler: RefCell::new(Some(handler)),
+      p0: PhantomData::default(),
     }
   }
 
-  pub fn listen<A: ToSocketAddrs>(
+  pub async fn listen<A: ToSocketAddrs>(
     &self,
     addr: A,
   ) -> io::Result<()> {
-    may::config().set_workers(8);
-
-    let (tx_init, rx_init) = mpmc::channel::<(Request, Response)>();
-
-    // Spawn worker threads. In 2024, OS threads are cheap to spawn
-    // so delegating HTTP request handling to OS threads is fast and
-    // allows the developer to avoid using async Rust.
-    // TODO: auto-grow if connections exceed the pool size
-    for _ in 0..1000 {
-      let rx_init = rx_init.clone();
-      let handler = self.handler.clone();
-
-      // Run each request in its own dedicated thread
-      std::thread::spawn(move || {
-        while let Ok((request, response)) = rx_init.recv() {
-          handler(request, response).unwrap();
+    let listener = create_listener(addr)?;
+    let handler = self.handler.borrow_mut().take().unwrap();
+    
+    while let Ok((stream, _)) = listener.accept().await {
+      let (mut reader, mut writer) = stream.into_split();
+      
+      // Task dedicated to writing to the socket
+      let (tx_writer, mut rx_writer) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
+      tokio::task::spawn(async move {
+        while let Some(bytes) = rx_writer.recv().await {
+          writer.write_all(&bytes).await.unwrap();
         }
       });
-    }
-
-    let listener = TcpListener::bind(addr)?;
-
-    while let Ok((mut stream, _)) = listener.accept() {
-      let tx_init = tx_init.clone();
-      let (tx_write, rx_write) = mpsc::channel::<ResponseWriteAction>();
-
-      go!({
-        let mut stream = stream.try_clone().unwrap();
-        move || {
-          while let Ok(event) = rx_write.recv() {
-            match event {
-              ResponseWriteAction::Write(bytes) => {
-                stream.write_all(&bytes).unwrap();
-              }
-              ResponseWriteAction::WriteAll(bytes) => {
-                stream.write_all(&bytes).unwrap();
-              }
-              ResponseWriteAction::Flush => {
-                stream.flush().unwrap();
-              }
-            }
-          }
-        }
-      });
-
-      go!(move || {
-        let mut buf = Vec::<u8>::new();
-
-        let mut header_count = 0;
-        let mut body_start = 0;
-        let mut cursor = 0;
-        let mut rc0 = false;
-        let mut nl0 = false;
-        let mut rc1 = false;
-
-        // NOTE: Socket connection can be reused, incoming bytes
-        // from multiple requests will be added in order
+      
+      // Task dedicated to reading from the socket
+      tokio::task::spawn(async move {
+        let mut buf_temp = Box::new([0; c::buffer::DEFAULT]);
+        let mut buf = BytesMut::new();
+  
+        // Detect incoming headers
         'socket: loop {
-          'block: {
+          let mut header_count = 0;
+          let mut body_start = 0;
+          let mut cursor = 0;
+          let mut rc0 = false;
+          let mut nl0 = false;
+          let mut rc1 = false;
+    
+          'get_headers: loop {          
             // Look for message body from incoming stream
-            // TODO: A more reliable way to do this
             let pos = cursor;
             cursor = buf.len();
-
+  
             for i in pos..buf.len() {
               if rc0 == false && buf[i] == c::chars::RC {
                 rc0 = true;
@@ -115,38 +89,32 @@ where
                 rc1 = true;
               } else if rc0 == true && nl0 == true && rc1 == true && buf[i] == c::chars::NL {
                 body_start = i + 1;
-                break 'block;
+                break 'get_headers;
               } else {
                 rc0 = false;
                 nl0 = false;
                 rc1 = false;
               }
             }
-
-            // If we are not in a request, wait for more bytes
-            let mut temp_buf = vec![0; c::buffer::DEFAULT];
-            match stream.read(&mut temp_buf) {
+            
+            match reader.read(&mut *buf_temp).await {
+              Ok(0) => break 'socket,
               Ok(n) => {
-                if n == 0 {
-                  break 'socket;
+                for i in 0..n {
+                  buf.put_u8(buf_temp[i])
                 }
-                buf.extend(temp_buf.drain(0..n));
-              }
-              Err(err) => println!("err = {err:?}"),
+              },
+              Err(_) => break 'socket,
             }
-          };
-
-          // If we are not in a request
-          if body_start == 0 {
-            continue;
           }
-
-          // Parse headers
-          let header_bytes = buf.drain(0..body_start).collect::<Vec<u8>>();
+          
+          // // Parse headers
+          let header_bytes = buf.split_to(body_start);
           let mut raw_headers = vec![httparse::EMPTY_HEADER; header_count - 1];
           let mut raw_request = httparse::Request::new(&mut raw_headers);
           raw_request.parse(&header_bytes).unwrap();
-
+          
+          // Construct headers
           let mut headers = HashMap::<String, Vec<String>>::new();
           for i in 0..raw_request.headers.len() {
             let mut header = std::mem::replace(&mut raw_request.headers[i], httparse::EMPTY_HEADER);
@@ -158,77 +126,111 @@ where
               .or_default()
               .push(header_value);
           }
-
+  
           // Determine content length
           let mut content_length = 0;
           if let Some(v) = headers.get(c::headers::CONTENT_LENGTH) {
             content_length = v.get(0).unwrap().parse::<usize>().unwrap();
           }
-
-          // Forward reader/writer to dedicated thread
-          let (tx_read, rx_read) = spsc::channel::<Vec<u8>>();
-
+          
+          // Map to a nice API for users to work with          
+          let (tx_reader, rx_reader) = tokio::sync::mpsc::channel::<Vec<u8>>(c::buffer::DEFAULT);
+          
           let req = Request {
             method: raw_request.method.unwrap().to_string(),
             url: raw_request.path.unwrap().to_string(),
             proto: format!("HTTP/1.{}", raw_request.version.unwrap()),
             headers: Headers::from(headers),
-            body: Box::new(RequestReader::new(rx_read)),
+            body_buf: Default::default(),
+            body: rx_reader,
             host: Default::default(),
           };
-
-          let res = Response::new(ResponseWriter::new(tx_write.clone()));
-
-          tx_init.send((req, res)).unwrap();
-
-          // Skip if the request does not have a body
+          
+          let res = Response {
+            head: Default::default(),
+            body_buf: Default::default(),
+            headers: Default::default(),
+            writer: tx_writer.clone(),
+          };
+          
+          // Call the handler function
+          // If there is no body, run the handler directly
           if content_length == 0 {
-            drop(tx_read);
-            header_count = 0;
-            body_start = 0;
+            drop(tx_reader);
+            handler(req, res).await.unwrap();
+            buf.clear();
             continue;
           }
-
+          
+          // Otherwise spawn an async task for the handler
+          // and buffer the body as the handler requests it
+          tokio::task::spawn(async move {
+            handler(req, res).await.unwrap();
+          });
+          
           // Read bytes for body until Content-Length
           // TODO Transfer-Encoding: chunked
           let mut bytes_read = 0;
-
+          
           loop {
             let mut bytes_to_take = content_length - bytes_read;
             if bytes_to_take > buf.len() {
               bytes_to_take = buf.len();
             }
-
-            let bytes = buf.drain(0..bytes_to_take).collect::<Vec<u8>>();
-
+  
+            let bytes = buf.split_to(bytes_to_take);
+  
             if bytes.len() > 0 {
               bytes_read += bytes.len();
-              tx_read.send(bytes).unwrap();
+              if tx_reader.send(bytes.to_vec()).await.is_err() {
+                // Handler finished early, drain the buffer and
+                // move onto the next request
+                continue;
+              };
             }
-
+  
             if bytes_read == content_length {
-              drop(tx_read);
-              header_count = 0;
-              body_start = 0;
+              drop(tx_reader);
               break;
             }
-
-            let mut temp_buf = vec![0; c::buffer::DEFAULT];
-            match stream.read(&mut temp_buf) {
+  
+            match reader.read(&mut *buf_temp).await {
+              Ok(0) => break 'socket,
               Ok(n) => {
-                if n == 0 {
-                  break;
+                for i in 0..n {
+                  buf.put_u8(buf_temp[i])
                 }
-
-                buf.extend(temp_buf.drain(0..n));
-              }
-              Err(err) => println!("err = {err:?}"),
-            }
+              },
+              Err(_) => break 'socket,
+            };
           }
+          
+          buf.clear();        
         }
       });
     }
-
+  
+    self.handler.borrow_mut().replace(handler).unwrap();
     Ok(())
   }
+}
+
+fn create_listener<A: ToSocketAddrs>(addr: A) -> io::Result<tokio::net::TcpListener> {
+  let mut addrs = addr.to_socket_addrs()?;
+  let addr = addrs.next().unwrap();
+  let listener = match &addr {
+    SocketAddr::V4(_) => Socket::new(Domain::IPV4, Type::STREAM, None)?,
+    SocketAddr::V6(_) => Socket::new(Domain::IPV6, Type::STREAM, None)?,
+  };
+
+  listener.set_nonblocking(true)?;
+  listener.set_nodelay(true)?;
+  listener.set_reuse_address(true)?;
+  listener.set_linger(Some(Duration::from_secs(0)))?;
+  listener.bind(&addr.into())?;
+  listener.listen(i32::MAX)?;
+
+  let listener = std::net::TcpListener::from(listener);
+  let listener = tokio::net::TcpListener::from_std(listener)?;
+  Ok(listener)
 }

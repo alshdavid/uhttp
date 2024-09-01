@@ -1,20 +1,20 @@
 use std::io;
-use std::io::Write;
 
 use uhttp::c;
 use uhttp::http1::*;
 use uhttp::*;
 
-fn main() -> io::Result<()> {
-  Server::new(handler).listen("0.0.0.0:8080")
+#[tokio::main]
+async fn main() -> io::Result<()> {
+  Server::new(handler).listen("0.0.0.0:8080").await
 }
 
-fn handler(
-  _req: Request,
+async fn handler(
+  mut _req: Request,
   mut res: Response,
 ) -> io::Result<()> {
   res.header(c::headers::CONTENT_TYPE, c::content_type::TEXT_PLAIN);
 
-  res.write(b"Hello World!")?;
+  res.write_all(b"Hello World!").await?;
   res.write_header(c::status::OK)
 }

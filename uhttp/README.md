@@ -1,12 +1,12 @@
 # µHTTP 🦀🚀🌎
 
-A tiny, fast, library for writing HTTP servers in Rust designed for humans:
+A fast, tiny library for writing HTTP servers in Rust designed for humans:
 
-- **Simple:** Inspired by Go's standard HTTP server library.
+- **Simple:** Inspired by Go's standard library HTTP server.
 
 - **Fast:** High performance, multi-threaded implementation built on top of Tokio that competes with the fastest Rust HTTP servers.
 
-- **Flexible**: Simple interface that enables many use cases. It can be used directly or to act as a base for frameworks to build on top of. The `Request` and `Response` types implement Rust's `Read` and `Write` interfaces, allowing for a standardized and generic interaction.
+- **Flexible**: Simple interface that enables many use cases. It can be used directly or to act as a base for frameworks to build on top of.
 
 ## Installation
 

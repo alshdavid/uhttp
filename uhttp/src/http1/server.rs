@@ -65,7 +65,7 @@ where
         let mut buf_temp = Box::new([0; c::buffer::DEFAULT]);
         let mut buf = BytesMut::new();
   
-        // Detect incoming headers
+        // Read from the socket
         'socket: loop {
           let mut header_count = 0;
           let mut body_start = 0;
@@ -73,9 +73,10 @@ where
           let mut rc0 = false;
           let mut nl0 = false;
           let mut rc1 = false;
-    
+
+          // Detect incoming headers
           'get_headers: loop {          
-            // Look for message body from incoming stream
+            // Look for headers and detect start of body
             let pos = cursor;
             cursor = buf.len();
   

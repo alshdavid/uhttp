@@ -1,0 +1,19 @@
+[package]
+name = "uhttp"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+http-body-util = "0.1.2"
+hyper = { version = "1.6.0", features = ["http1"] }
+hyper-util = { version = "0.1.10", features = ["server-graceful"] }
+tokio = { version = "1.44.0", features = ["rt-multi-thread", "fs"] }
+tokio-util = { version = "0.7.13", features = [
+  "io",
+  "io-util",
+  "futures-util",
+] }
+anyhow = "1.0.97"
+futures = "0.3.31"
+http = "1.2.0"
+async_fn_traits = "0.1.1"

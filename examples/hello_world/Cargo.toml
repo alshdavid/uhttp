@@ -1,8 +1,0 @@
-[package]
-name = "uhttp_example_hello_world"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-uhttp = { path = "../../uhttp" }
-tokio = { version = "*", features = ["full"] }

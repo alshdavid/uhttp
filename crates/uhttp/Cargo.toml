@@ -2,6 +2,8 @@
 name = "uhttp"
 version = "0.3.0"
 edition = "2024"
+description = "Simple http server for humans"
+license = "MIT"
 
 [dependencies]
 http-body-util = "0.1.2"

@@ -7,7 +7,12 @@ use super::internal_types::HyperRequest;
 use crate::Request;
 
 impl From<HyperRequest<HyperIncoming>> for Request {
-  fn from(req: HyperRequest<HyperIncoming>) -> Self {
+  fn from(mut req: HyperRequest<HyperIncoming>) -> Self {
+    let headers = std::mem::take(req.headers_mut());
+    let method = std::mem::take(req.method_mut());
+    let version = std::mem::take(req.version_mut());
+    let uri = std::mem::take(req.uri_mut());
+
     let body = req.into_body();
     let body = BodyDataStream::new(body);
     let body_stream = body.map(|result| result.map_err(|error| std::io::Error::other(error)));
@@ -15,6 +20,10 @@ impl From<HyperRequest<HyperIncoming>> for Request {
 
     Self {
       inner: Box::new(read),
+      headers,
+      method,
+      version,
+      uri,
     }
   }
 }

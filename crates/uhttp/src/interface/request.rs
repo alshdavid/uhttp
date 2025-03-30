@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use tokio::io::AsyncRead;
 
 pub struct Request {

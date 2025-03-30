@@ -1,8 +1,8 @@
 use std::convert::Infallible;
 
 use futures::TryStreamExt;
-use http_body_util::combinators::BoxBody;
 use http_body_util::StreamBody;
+use http_body_util::combinators::BoxBody;
 use tokio::io::DuplexStream;
 
 use super::internal_types::HyperBytes;

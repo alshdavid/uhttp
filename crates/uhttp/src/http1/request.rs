@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use futures::StreamExt;
 use http_body_util::BodyDataStream;
 use tokio_util::io::StreamReader;

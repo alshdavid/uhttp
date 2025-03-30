@@ -1,4 +1,3 @@
-use std::io::Write;
 use std::io::{self};
 use std::str::FromStr;
 
@@ -11,24 +10,14 @@ use tokio::sync::mpsc::UnboundedSender;
 use crate::Response;
 
 pub struct Http1Response {
-  pub(super) tx_writer: UnboundedSender<Vec<u8>>,
+  pub(super) tx_writer: UnboundedSender<Http1ResponseTx>,
   pub(super) headers: HeaderMap,
 }
 
-impl Write for Http1Response {
-  fn write(
-    &mut self,
-    buf: &[u8],
-  ) -> std::io::Result<usize> {
-    if self.tx_writer.send(buf.to_vec()).is_err() {
-      return Err(io::Error::other("Failed to write"));
-    }
-    Ok(buf.len())
-  }
-
-  fn flush(&mut self) -> std::io::Result<()> {
-    todo!()
-  }
+pub enum Http1ResponseTx {
+  Write(Vec<u8>),
+  Flush,
+  Shutdown,
 }
 
 impl Response for Http1Response {
@@ -64,7 +53,7 @@ impl AsyncWrite for Http1Response {
     buf: &[u8],
   ) -> std::task::Poll<Result<usize, io::Error>> {
     let len = buf.len();
-    if let Err(_error) = self.tx_writer.send(buf.to_vec()) {
+    if let Err(_error) = self.tx_writer.send(Http1ResponseTx::Write(buf.to_vec())) {
       return std::task::Poll::Ready(Err(io::Error::other("Failed to write bytes")));
     };
     std::task::Poll::Ready(Ok(len))
@@ -72,47 +61,37 @@ impl AsyncWrite for Http1Response {
 
   fn poll_flush(
     self: std::pin::Pin<&mut Self>,
-    cx: &mut std::task::Context<'_>,
+    _cx: &mut std::task::Context<'_>,
   ) -> std::task::Poll<Result<(), io::Error>> {
-    todo!()
+    if let Err(_error) = self.tx_writer.send(Http1ResponseTx::Flush) {
+      return std::task::Poll::Ready(Err(io::Error::other("Failed to flush bytes")));
+    };
+    std::task::Poll::Ready(Ok(()))
   }
 
   fn poll_shutdown(
     self: std::pin::Pin<&mut Self>,
-    cx: &mut std::task::Context<'_>,
+    _cx: &mut std::task::Context<'_>,
   ) -> std::task::Poll<Result<(), io::Error>> {
-    todo!()
+    if let Err(_error) = self.tx_writer.send(Http1ResponseTx::Shutdown) {
+      return std::task::Poll::Ready(Err(io::Error::other("Failed to shutdown")));
+    };
+    std::task::Poll::Ready(Ok(()))
   }
 }
 
 pub struct Http1AsyncWriter {
-  pub(super) tx_writer: UnboundedSender<Vec<u8>>,
-}
-
-impl Write for Http1AsyncWriter {
-  fn write(
-    &mut self,
-    buf: &[u8],
-  ) -> std::io::Result<usize> {
-    if self.tx_writer.send(buf.to_vec()).is_err() {
-      return Err(io::Error::other("Failed to write"));
-    }
-    Ok(buf.len())
-  }
-
-  fn flush(&mut self) -> std::io::Result<()> {
-    todo!()
-  }
+  pub(super) tx_writer: UnboundedSender<Http1ResponseTx>,
 }
 
 impl AsyncWrite for Http1AsyncWriter {
   fn poll_write(
     self: std::pin::Pin<&mut Self>,
-    cx: &mut std::task::Context<'_>,
+    _cx: &mut std::task::Context<'_>,
     buf: &[u8],
   ) -> std::task::Poll<Result<usize, io::Error>> {
     let len = buf.len();
-    if let Err(_error) = self.tx_writer.send(buf.to_vec()) {
+    if let Err(_error) = self.tx_writer.send(Http1ResponseTx::Write(buf.to_vec())) {
       return std::task::Poll::Ready(Err(io::Error::other("Failed to write bytes")));
     };
     std::task::Poll::Ready(Ok(len))
@@ -120,15 +99,21 @@ impl AsyncWrite for Http1AsyncWriter {
 
   fn poll_flush(
     self: std::pin::Pin<&mut Self>,
-    cx: &mut std::task::Context<'_>,
+    _cx: &mut std::task::Context<'_>,
   ) -> std::task::Poll<Result<(), io::Error>> {
-    todo!()
+    if let Err(_error) = self.tx_writer.send(Http1ResponseTx::Flush) {
+      return std::task::Poll::Ready(Err(io::Error::other("Failed to flush bytes")));
+    };
+    std::task::Poll::Ready(Ok(()))
   }
 
   fn poll_shutdown(
     self: std::pin::Pin<&mut Self>,
-    cx: &mut std::task::Context<'_>,
+    _cx: &mut std::task::Context<'_>,
   ) -> std::task::Poll<Result<(), io::Error>> {
-    todo!()
+    if let Err(_error) = self.tx_writer.send(Http1ResponseTx::Shutdown) {
+      return std::task::Poll::Ready(Err(io::Error::other("Failed to shutdown")));
+    };
+    std::task::Poll::Ready(Ok(()))
   }
 }

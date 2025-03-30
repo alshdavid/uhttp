@@ -1,5 +1,5 @@
 [package]
-name = "uhttp_example_basic"
+name = "uhttp_example_body"
 version = "0.1.0"
 edition = "2024"
 

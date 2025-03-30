@@ -45,7 +45,7 @@ pub async fn create_server(
                     headers: HeaderMap::new(),
                   };
 
-                  handle_func(req, &mut res).await.unwrap();
+                  handle_func(req.into(), &mut res).await.unwrap();
 
                   drop(res.tx_writer);
                   let mut res_headers = res.headers;

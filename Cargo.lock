@@ -519,7 +519,15 @@ name = "uhttp_example_basic"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "hyper",
+ "tokio",
+ "uhttp",
+]
+
+[[package]]
+name = "uhttp_example_body"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
  "tokio",
  "uhttp",
 ]

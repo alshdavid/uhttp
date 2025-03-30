@@ -1,14 +1,14 @@
 use std::convert::Infallible;
 
 use futures::TryStreamExt;
-use http_body_util::StreamBody;
 use http_body_util::combinators::BoxBody;
+use http_body_util::StreamBody;
 use tokio::io::DuplexStream;
 
-use super::internal_types::ResponseBuilder;
 use super::internal_types::HyperBytes;
+use super::internal_types::ResponseBuilder;
 
-pub (crate) fn create_stream(
+pub(crate) fn create_stream(
   res: ResponseBuilder
 ) -> crate::Result<(
   http::Response<BoxBody<HyperBytes, Infallible>>,
@@ -21,7 +21,7 @@ pub (crate) fn create_stream(
     .map_err(|_item| panic!());
 
   let stream_body = StreamBody::new(reader_stream);
-  
+
   let boxed_body = BoxBody::<HyperBytes, Infallible>::new(stream_body);
 
   let res: http::Response<BoxBody<HyperBytes, Infallible>> = res.body(boxed_body)?;

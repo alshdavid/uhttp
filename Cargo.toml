@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 
-members = ["./uhttp", "./examples/*"]
+members = ["./crates/*", "./examples/*"]
 
 [profile.release]
 opt-level = 3

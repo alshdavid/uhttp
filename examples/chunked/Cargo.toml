@@ -1,0 +1,9 @@
+[package]
+name = "uhttp_example_chunked"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+uhttp = { path = "../../crates/uhttp" }
+tokio = { version = "*", features = ["full"] }
+anyhow = "*"

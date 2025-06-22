@@ -5,6 +5,9 @@ edition = "2024"
 description = "Simple http server for humans"
 license = "MIT"
 
+[lints]
+workspace = true
+
 [dependencies]
 http-body-util = { workspace = true }
 hyper = { workspace = true, features = ["http1"] }

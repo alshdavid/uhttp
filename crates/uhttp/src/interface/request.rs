@@ -14,7 +14,7 @@ pub struct Request {
 
 impl Request {
   pub fn body(&mut self) -> &mut Box<dyn AsyncRead + Unpin + Send + Sync> {
-    return &mut self.inner;
+    &mut self.inner
   }
 
   pub fn headers(&self) -> &HeaderMap {

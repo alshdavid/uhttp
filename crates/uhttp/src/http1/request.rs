@@ -15,7 +15,7 @@ impl From<HyperRequest<HyperIncoming>> for Request {
 
     let body = req.into_body();
     let body = BodyDataStream::new(body);
-    let body_stream = body.map(|result| result.map_err(|error| std::io::Error::other(error)));
+    let body_stream = body.map(|result| result.map_err(std::io::Error::other));
     let read = StreamReader::new(body_stream);
 
     Self {

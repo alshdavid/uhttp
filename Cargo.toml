@@ -3,6 +3,14 @@ resolver = "2"
 
 members = ["./crates/*", "./examples/*"]
 
+[workspace.lints.rust]
+elided_lifetimes_in_paths = "allow"
+rust_2018_idioms = { priority = -1, level = "deny" }
+
+[workspace.lints.clippy]
+module_inception = "allow"
+uninlined-format-args = "allow"
+
 [profile.release]
 opt-level = 3
 debug = false

@@ -11,7 +11,7 @@ async fn main() -> anyhow::Result<()> {
       req.body().read_to_string(&mut data).await?;
 
       println!("req: {}", data);
-      res.write(format!("hello world\n").as_bytes()).await?;
+      res.write("hello world\n".to_string().as_bytes()).await?;
       Ok(())
     })
   })

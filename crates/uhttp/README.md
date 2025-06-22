@@ -15,3 +15,41 @@ Available on [crates.io](https://crates.io/crates/uhttp), install with:
 ```shell
 cargo add uhttp
 ```
+
+## Usage
+
+TODO but the desired API is this:
+
+```rust
+use tokio::io::AsyncWriteExt;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+  uhttp::http1::create_server(async |_req, res| {
+    res.write(b"hello world\n").await
+  })
+    .listen("0.0.0.0:8080")
+    .await
+}
+```
+
+```rust
+use tokio::io::AsyncWriteExt;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+  let mut app = uhttp::mux::Router();
+
+  app.get("/foo", async |req, res| {
+    res.write(b"bar\n").await
+  })
+
+  app.post("/bar", async |req, res| {
+    res.write(b"foo\n").await
+  })
+
+  uhttp::http1::create_server(app.handler())
+    .listen("0.0.0.0:8080")
+    .await
+}
+```

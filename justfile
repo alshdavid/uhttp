@@ -1,3 +1,9 @@
+run package="basic":
+  cargo run --package uhttp_example_{{package}}
+
+build:
+  cargo build
+
 format arg="--check":
   #!/usr/bin/env bash
   just fmt {{arg}}

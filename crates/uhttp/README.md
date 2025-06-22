@@ -25,7 +25,7 @@ use tokio::io::AsyncWriteExt;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-  uhttp::http1::create_server(async |_req, res| {
+  uhttp::http1::create_server(async |req, res| {
     res.write(b"hello world\n").await
   })
     .listen("0.0.0.0:8080")

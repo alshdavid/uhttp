@@ -5,5 +5,5 @@ edition = "2024"
 
 [dependencies]
 uhttp = { path = "../../crates/uhttp" }
-tokio = { version = "*", features = ["full"] }
-anyhow = "*"
+tokio = { workspace = true, features = ["full"] }
+anyhow = { workspace = true }

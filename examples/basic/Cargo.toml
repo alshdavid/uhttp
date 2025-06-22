@@ -7,3 +7,4 @@ edition = "2024"
 uhttp = { path = "../../crates/uhttp" }
 tokio = { version = "*", features = ["full"] }
 anyhow = "*"
+async_fn_traits = "0.1.1"

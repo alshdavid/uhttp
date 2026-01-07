@@ -15,7 +15,7 @@ use tokio::net::ToSocketAddrs;
 use super::Request;
 use super::Response;
 
-pub async fn http1_server<F, Fut, A>(
+pub async fn create_server<F, Fut, A>(
   addr: A,
   handle_func: F,
 ) -> anyhow::Result<()>

@@ -10,4 +10,3 @@ workspace = true
 uhttp = { path = "../../crates/uhttp" }
 tokio = { workspace = true, features = ["full"] }
 anyhow = { workspace = true }
-http = { workspace = true }

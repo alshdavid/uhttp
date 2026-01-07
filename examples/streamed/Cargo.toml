@@ -1,5 +1,5 @@
 [package]
-name = "uhttp_example_sse"
+name = "uhttp_example_streamed"
 version = "0.1.0"
 edition = "2024"
 

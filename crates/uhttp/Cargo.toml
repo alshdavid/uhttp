@@ -5,6 +5,9 @@ edition = "2024"
 description = "Simple http server for humans"
 license = "MIT"
 
+[features]
+json = ["dep:serde", "dep:serde_json"]
+
 [lints]
 workspace = true
 
@@ -18,3 +21,5 @@ anyhow = { workspace = true }
 futures = { workspace = true }
 http = { workspace = true }
 async_fn_traits = { workspace = true }
+serde = { workspace = true, features = ["derive"], optional = true }
+serde_json = { workspace = true, optional = true }

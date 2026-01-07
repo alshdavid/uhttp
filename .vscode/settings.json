@@ -1,9 +1,15 @@
 {
   "editor.formatOnSave": true,
   "editor.formatOnType": true,
-  "rust-analyzer.rustfmt.overrideCommand": ["rustfmt", "+nightly"],
+  "rust-analyzer.rustfmt.overrideCommand": [
+    "rustfmt",
+    "+nightly"
+  ],
   "[rust]": {
-    "editor.defaultFormatter": "rust-lang.rust-analyzer", 
-    "editor.formatOnSave": true 
-  }
+    "editor.defaultFormatter": "rust-lang.rust-analyzer",
+    "editor.formatOnSave": true
+  },
+  "rust-analyzer.cargo.features": [
+    "json"
+  ]
 }

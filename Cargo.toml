@@ -23,11 +23,11 @@ rpath = false
 
 [workspace.dependencies]
 http-body-util = "0.1"
-hyper = "1.6"
+hyper = "^1"
 hyper-util = "0.1"
-tokio = "1.45"
+tokio = "^1"
 tokio-util = "0.7"
-anyhow = "1.0"
+anyhow = "^1"
 futures = "0.3"
-http = "1.2"
+http = "^1"
 async_fn_traits = "0.1"

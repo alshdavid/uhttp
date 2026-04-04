@@ -25,7 +25,7 @@ use uhttp::*;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-  uhttp::http1::create_server("0.0.0.0:8080", async |req, res| {
+  uhttp::http1::create_server("0.0.0.0:8080", |req, mut res| async move {
     res.header().add("Content-Type", "text/html")
     res.write_all(b"<body>hello world</body>").await
   }).await
@@ -39,7 +39,7 @@ use uhttp::*;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-  uhttp::http1::create_server("0.0.0.0:8080", async |req, res| {
+  uhttp::http1::create_server("0.0.0.0:8080", |req, mut res| async move {
     // Send the headers before sending the body chunks
     res.write_head(uhttp::StatusCode::OK).await?;
     
@@ -62,7 +62,7 @@ use uhttp::*;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-  uhttp::http1::create_server(async |req, res| {
+  uhttp::http1::create_server(|req, mut res| async move {
     res.header().add("Content-Type", "text/html")
     res.write_all(b"<body>hello world</body>").await
   })
@@ -80,11 +80,11 @@ use uhttp::*;
 async fn main() -> anyhow::Result<()> {
   let mut app = uhttp::mux::Router();
 
-  app.get("/foo", async |req, res| {
+  app.get("/foo", |req, mut res| async move  {
     res.write(b"bar\n").await
   })
 
-  app.post("/bar", async |req, res| {
+  app.post("/bar", |req, mut res| async move {
     res.write(b"foo\n").await
   })
 

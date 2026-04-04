@@ -3,7 +3,7 @@
 # Warmup
 oha -n 100 $URL
 
-REQUESTS=50000
+REQUESTS=100000
 PORT=8080
 CONCURRENCY=100
 URL="http://localhost:${PORT}"

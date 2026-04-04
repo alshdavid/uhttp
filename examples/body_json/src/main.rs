@@ -3,10 +3,10 @@
     curl -H "Content-Type: application/json" -d '{ "message": "Hello World" }' http://localhost:8080
 */
 use serde::Deserialize;
-use tokio::io::AsyncWriteExt;
-use uhttp;
+use serde::Serialize;
+use uhttp::*;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct BodyJson {
   pub message: String,
 }
@@ -14,12 +14,14 @@ pub struct BodyJson {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
   uhttp::http1::create_server("0.0.0.0:8080", |mut req, mut res| async move {
-    println!("{}", req.uri());
-
+    // Parse incoming JSON body
     let body = uhttp::body::json::<BodyJson>(&mut req.body()).await?;
-    dbg!(&body);
 
-    res.write_all(b"Ok\n").await?;
+    // Serialize response body
+    let result = serde_json::to_vec(&body)?;
+
+    // Respond with serialized body
+    res.write_all(&result).await?;
     Ok(())
   })
   .await

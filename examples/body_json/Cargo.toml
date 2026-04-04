@@ -11,3 +11,4 @@ uhttp = { path = "../../crates/uhttp", features = ["json"] }
 tokio = { workspace = true, features = ["full"] }
 anyhow = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }

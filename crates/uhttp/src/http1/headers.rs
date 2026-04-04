@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
-use http::{HeaderName, HeaderValue};
+use http::HeaderMap;
+use http::HeaderName;
+use http::HeaderValue;
 use tokio::sync::RwLock;
 
 use super::ResponseState;
@@ -12,6 +14,51 @@ pub struct Headers {
 impl Headers {
   pub(super) fn new(headers: Arc<RwLock<ResponseState>>) -> Self {
     Self { state: headers }
+  }
+
+  pub async fn inner_cloned(&self) -> anyhow::Result<HeaderMap> {
+    let guard = self.state.read().await;
+    match &*guard {
+      ResponseState::Builder((builder, _)) => {
+        if let Some(headers) = builder.headers_ref().cloned() {
+          return Ok(headers);
+        };
+        return Err(anyhow::anyhow!("No headers present"));
+      }
+      ResponseState::Stream(_) => {
+        return Err(anyhow::anyhow!("Headers already sent"));
+      }
+      ResponseState::Done => {
+        return Err(anyhow::anyhow!("Request already sent"));
+      }
+      ResponseState::Pending => {
+        return Err(anyhow::anyhow!("Request currently sending"));
+      }
+    }
+  }
+
+  pub async fn replace(
+    &mut self,
+    headers: HeaderMap,
+  ) -> anyhow::Result<()> {
+    let mut guard = self.state.write().await;
+    match &mut *guard {
+      ResponseState::Builder((builder, _)) => {
+        if let Some(current) = builder.headers_mut() {
+          *current = headers;
+        }
+        Ok(())
+      }
+      ResponseState::Stream(_) => {
+        return Err(anyhow::anyhow!("Headers already sent"));
+      }
+      ResponseState::Done => {
+        return Err(anyhow::anyhow!("Request already sent"));
+      }
+      ResponseState::Pending => {
+        return Err(anyhow::anyhow!("Request currently sending"));
+      }
+    }
   }
 
   pub async fn add(

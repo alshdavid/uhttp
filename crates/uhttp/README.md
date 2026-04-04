@@ -27,8 +27,9 @@ use uhttp::*;
 async fn main() -> anyhow::Result<()> {
   
   uhttp::http1::create_server(|req, mut res| async move {
-    res.header().add("Content-Type", "text/html")
-    res.write_all(b"<body>hello world</body>").await
+    res.header().add("Content-Type", "text/html").await?;
+    res.write_all(b"<body>hello world</body>").await?;
+    Ok(())
   })
   .listen("0.0.0.0:8080")
   .await
@@ -39,6 +40,8 @@ async fn main() -> anyhow::Result<()> {
 ### Streamed Response
 
 ```rust
+use std::time::Duration;
+
 use uhttp::*;
 
 #[tokio::main]
@@ -87,7 +90,6 @@ async fn main() -> anyhow::Result<()> {
   .listen("0.0.0.0:8080")
   .await
 }
-
 ```
 
 ### Router / MUX

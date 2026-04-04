@@ -2,7 +2,7 @@
 
 `uhttp` is a lightweight and composible http server and router for building Rust HTTP services
 
-- **Simple:** Inspired by Go's standard library HTTP server.
+- **Simple:** Inspired by Go's standard library HTTP server. Uses `Read` / `Write` traits for the `Request` / `Response`.
 
 - **Fast:** High performance, multi-threaded implementation built on top of Hyper & Tokio that competes with the fastest Rust HTTP servers.
 
@@ -13,7 +13,7 @@
 ```shell
 cargo add uhttp
 cargo add uhttp -F json
-cargo add uhttp -F mux # Coming soon
+cargo add uhttp -F mux
 ```
 
 ## Usage
@@ -25,12 +25,14 @@ use uhttp::*;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+  
   uhttp::http1::create_server(|req, mut res| async move {
     res.header().add("Content-Type", "text/html")
     res.write_all(b"<body>hello world</body>").await
   })
   .listen("0.0.0.0:8080")
   .await
+  
 }
 ```
 
@@ -57,7 +59,7 @@ async fn main() -> anyhow::Result<()> {
 }
 ```
 
-### Read JSON Payload
+### Read / Write JSON Payload
 
 ```rust
 use serde::Deserialize;
@@ -88,34 +90,43 @@ async fn main() -> anyhow::Result<()> {
 
 ```
 
-## WIP
-
-### MUX / Router
+### Router / MUX
 
 ```rust
 use uhttp::*;
-use uhttp::mux::*;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-  let mut app = uhttp::mux::Router();
+  let mut app = uhttp::mux::Router::new();
 
-  app.get("/foo", |req, mut res| async move  {
-    res.write(b"bar\n").await
-  })
+  app.get("/foo", |_req, mut res| async move {
+    res.write(b"foo\n").await?;
+    Ok(())
+  });
 
-  app.post("/bar", |req, mut res| async move {
-    res.write(b"foo\n").await
-  })
-  
-  app.post("/fizz/{buzz}", |req, mut res| async move {
+  app.post("/bar", |_req, mut res| async move {
+    res.write(b"bar\n").await?;
+    Ok(())
+  });
+
+  // Example of a URL parameter
+  app.get("/fizz/:buzz", |req, mut res| async move {
+    res.write(b"fizz\n").await?;
+
     let Some(buzz) = req.url_param("buzz") else {
       res.write_head(uhttp::StatusCode::BAD_REQUEST).await?;
-      return
-    }
-    
-    res.write_all(format!("Param: {}", buzz)).await
-  })
+      return Ok(());
+    };
+
+    res.write_all(format!("Param: {}", buzz).as_bytes()).await?;
+    Ok(())
+  });
+
+  // Can be used to serve static assets
+  app.not_found(|_req, mut res| async move {
+    res.write(b"Not found route").await?;
+    Ok(())
+  });
 
   uhttp::http1::create_server(app.handler())
     .listen("0.0.0.0:8080")

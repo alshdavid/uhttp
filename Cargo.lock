@@ -289,6 +289,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
 
 [[package]]
+name = "path-tree"
+version = "0.8.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c2a97453bc21a968f722df730bfe11bd08745cb50d1300b0df2bda131dece136"
+dependencies = [
+ "smallvec",
+]
+
+[[package]]
+name = "percent-encoding"
+version = "2.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
+
+[[package]]
 name = "pin-project-lite"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -463,7 +478,7 @@ dependencies = [
 
 [[package]]
 name = "uhttp"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "async_fn_traits",
@@ -472,6 +487,8 @@ dependencies = [
  "http-body-util",
  "hyper",
  "hyper-util",
+ "path-tree",
+ "percent-encoding",
  "serde",
  "serde_json",
  "tokio",
@@ -480,6 +497,15 @@ dependencies = [
 
 [[package]]
 name = "uhttp_example_basic"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "tokio",
+ "uhttp",
+]
+
+[[package]]
+name = "uhttp_example_basic_routing"
 version = "0.1.0"
 dependencies = [
  "anyhow",

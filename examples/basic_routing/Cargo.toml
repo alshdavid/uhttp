@@ -1,0 +1,12 @@
+[package]
+name = "uhttp_example_basic_routing"
+version = "0.1.0"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[dependencies]
+uhttp = { path = "../../crates/uhttp", features = ["mux"] }
+tokio = { workspace = true, features = ["full"] }
+anyhow = { workspace = true }

@@ -1,3 +1,5 @@
+#[cfg(feature = "mux")]
+use std::collections::HashMap;
 use std::io;
 use std::pin::Pin;
 use std::task::Context;
@@ -17,6 +19,8 @@ pub struct Request {
   pub(crate) method: Method,
   pub(crate) version: Version,
   pub(crate) uri: Uri,
+  #[cfg(feature = "mux")]
+  pub(crate) params: HashMap<String, String>,
 }
 
 impl Request {
@@ -28,7 +32,17 @@ impl Request {
       method: parts.method,
       version: parts.version,
       uri: parts.uri,
+      #[cfg(feature = "mux")]
+      params: HashMap::new(),
     }
+  }
+
+  #[cfg(feature = "mux")]
+  pub fn url_param(
+    &self,
+    name: &str,
+  ) -> Option<&String> {
+    self.params.get(name)
   }
 
   pub fn body(&mut self) -> &mut Box<dyn AsyncRead + Unpin + Send + Sync> {

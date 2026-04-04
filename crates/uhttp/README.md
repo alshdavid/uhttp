@@ -18,21 +18,63 @@ cargo add uhttp
 
 ## Usage
 
-TODO but the desired API is this:
+### Standard Response
 
 ```rust
-use tokio::io::AsyncWriteExt;
+use uhttp::*;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
   uhttp::http1::create_server("0.0.0.0:8080", async |req, res| {
-    res.write_all(b"hello world\n").await
+    res.header().add("Content-Type", "text/html")
+    res.write_all(b"<body>hello world</body>").await
   }).await
 }
 ```
 
+### Streamed Response
+
 ```rust
-use tokio::io::AsyncWriteExt;
+use uhttp::*;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+  uhttp::http1::create_server("0.0.0.0:8080", async |req, res| {
+    // Send the headers before sending the body chunks
+    res.write_head(uhttp::StatusCode::OK).await?;
+    
+    for i in 0..10 {
+      res.write_all(format!("{}", i).as_bytes()).await?;
+      tokio::time::sleep(Duration::from_millis(1000)).await;
+    }
+    
+    Ok(())
+  }).await
+}
+```
+
+## WIP
+
+### Server
+
+```rust
+use uhttp::*;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+  uhttp::http1::create_server(async |req, res| {
+    res.header().add("Content-Type", "text/html")
+    res.write_all(b"<body>hello world</body>").await
+  })
+  .listen("0.0.0.0:8080")
+  .await
+}
+```
+
+### MUX
+
+```rust
+use uhttp::*;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

@@ -10,10 +10,9 @@ A fast, tiny library for writing HTTP servers in Rust designed for humans:
 
 ## Installation
 
-Available on [crates.io](https://crates.io/crates/uhttp), install with:
-
 ```shell
 cargo add uhttp
+cargo add uhttp -F json
 ```
 
 ## Usage

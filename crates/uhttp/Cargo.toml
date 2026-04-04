@@ -1,9 +1,10 @@
 [package]
 name = "uhttp"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2024"
 description = "Simple http server for humans"
 license = "MIT"
+repository = "https://github.com/alshdavid/uhttp"
 
 [features]
 json = ["dep:serde", "dep:serde_json"]
@@ -15,7 +16,7 @@ workspace = true
 http-body-util = { workspace = true }
 hyper = { workspace = true, features = ["http1"] }
 hyper-util = { workspace = true, features = ["server-graceful"] }
-tokio = { workspace = true, features = ["rt-multi-thread", "fs"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "fs", "net"] }
 tokio-util = { workspace = true, features = ["io", "io-util", "futures-util"] }
 anyhow = { workspace = true }
 futures = { workspace = true }

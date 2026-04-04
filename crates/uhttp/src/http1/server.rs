@@ -38,7 +38,7 @@ where
     &self,
     addr: impl ToSocketAddrs,
   ) -> anyhow::Result<()> {
-    let listener = TcpListener::bind(&addr).await?;
+    let listener: TcpListener = TcpListener::bind(&addr).await?;
     let handler_func_ref = Arc::clone(&self.handle_func);
 
     loop {

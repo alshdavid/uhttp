@@ -7,7 +7,7 @@ use uhttp;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-  uhttp::http1::create_server("0.0.0.0:8080", |mut req, mut res| async move {
+  uhttp::http1::create_server(|mut req, mut res| async move {
     println!("{}", req.uri());
 
     let body = uhttp::body::utf8(&mut req.body()).await?;
@@ -16,5 +16,6 @@ async fn main() -> anyhow::Result<()> {
     res.write_all(b"Ok\n").await?;
     Ok(())
   })
+  .listen("0.0.0.0:8080")
   .await
 }

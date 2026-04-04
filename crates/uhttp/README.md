@@ -1,10 +1,10 @@
-# µHTTP 🦀🚀🌎
+# µHTTP
 
-A fast, tiny library for writing HTTP servers in Rust designed for humans:
+`uhttp` is a lightweight and composible http server and router for building Rust HTTP services
 
 - **Simple:** Inspired by Go's standard library HTTP server.
 
-- **Fast:** High performance, multi-threaded implementation built on top of Tokio that competes with the fastest Rust HTTP servers.
+- **Fast:** High performance, multi-threaded implementation built on top of Hyper & Tokio that competes with the fastest Rust HTTP servers.
 
 - **Flexible**: Simple interface that enables many use cases. It can be used directly or to act as a base for frameworks to build on top of.
 
@@ -13,21 +13,24 @@ A fast, tiny library for writing HTTP servers in Rust designed for humans:
 ```shell
 cargo add uhttp
 cargo add uhttp -F json
+cargo add uhttp -F mux # Coming soon
 ```
 
 ## Usage
 
-### Standard Response
+### Basic Response
 
 ```rust
 use uhttp::*;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-  uhttp::http1::create_server("0.0.0.0:8080", |req, mut res| async move {
+  uhttp::http1::create_server(|req, mut res| async move {
     res.header().add("Content-Type", "text/html")
     res.write_all(b"<body>hello world</body>").await
-  }).await
+  })
+  .listen("0.0.0.0:8080")
+  .await
 }
 ```
 
@@ -38,7 +41,7 @@ use uhttp::*;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-  uhttp::http1::create_server("0.0.0.0:8080", |req, mut res| async move {
+  uhttp::http1::create_server(|req, mut res| async move {
     // Send the headers before sending the body chunks
     res.write_head(uhttp::StatusCode::OK).await?;
     
@@ -48,7 +51,9 @@ async fn main() -> anyhow::Result<()> {
     }
     
     Ok(())
-  }).await
+  })
+  .listen("0.0.0.0:8080")
+  .await
 }
 ```
 
@@ -66,7 +71,7 @@ pub struct BodyJson {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-  uhttp::http1::create_server("0.0.0.0:8080", |mut req, mut res| async move {
+  uhttp::http1::create_server(|mut req, mut res| async move {
     // Parse incoming JSON body
     let body = uhttp::body::json::<BodyJson>(&mut req.body()).await?;
 
@@ -77,6 +82,7 @@ async fn main() -> anyhow::Result<()> {
     res.write_all(&result).await?;
     Ok(())
   })
+  .listen("0.0.0.0:8080")
   .await
 }
 
@@ -84,26 +90,11 @@ async fn main() -> anyhow::Result<()> {
 
 ## WIP
 
-### Server
+### MUX / Router
 
 ```rust
 use uhttp::*;
-
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-  uhttp::http1::create_server(|req, mut res| async move {
-    res.header().add("Content-Type", "text/html")
-    res.write_all(b"<body>hello world</body>").await
-  })
-  .listen("0.0.0.0:8080")
-  .await
-}
-```
-
-### MUX
-
-```rust
-use uhttp::*;
+use uhttp::mux::*;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -115,6 +106,15 @@ async fn main() -> anyhow::Result<()> {
 
   app.post("/bar", |req, mut res| async move {
     res.write(b"foo\n").await
+  })
+  
+  app.post("/fizz/{buzz}", |req, mut res| async move {
+    let Some(buzz) = req.url_param("buzz") else {
+      res.write_head(uhttp::StatusCode::BAD_REQUEST).await?;
+      return
+    }
+    
+    res.write_all(format!("Param: {}", buzz)).await
   })
 
   uhttp::http1::create_server(app.handler())

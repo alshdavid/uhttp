@@ -7,6 +7,6 @@ edition = "2024"
 workspace = true
 
 [dependencies]
-uhttp = { path = "../../crates/uhttp", features = ["mux"] }
+uhttp = { path = "../../crates/uhttp", features = ["router"] }
 tokio = { workspace = true, features = ["full"] }
 anyhow = { workspace = true }

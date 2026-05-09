@@ -13,7 +13,7 @@
 ```shell
 cargo add uhttp
 cargo add uhttp -F json
-cargo add uhttp -F mux
+cargo add uhttp -F router
 ```
 
 ## Usage
@@ -25,7 +25,7 @@ use uhttp::*;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-  
+
   uhttp::http1::create_server(|req, mut res| async move {
     res.header().add("Content-Type", "text/html").await?;
     res.write_all(b"<body>hello world</body>").await?;
@@ -33,7 +33,7 @@ async fn main() -> anyhow::Result<()> {
   })
   .listen("0.0.0.0:8080")
   .await
-  
+
 }
 ```
 
@@ -49,12 +49,12 @@ async fn main() -> anyhow::Result<()> {
   uhttp::http1::create_server(|req, mut res| async move {
     // Send the headers before sending the body chunks
     res.write_head(uhttp::StatusCode::OK).await?;
-    
+
     for i in 0..10 {
       res.write_all(format!("{}", i).as_bytes()).await?;
       tokio::time::sleep(Duration::from_millis(1000)).await;
     }
-    
+
     Ok(())
   })
   .listen("0.0.0.0:8080")
@@ -82,7 +82,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Serialize response body
     let result = serde_json::to_vec(&body)?;
-    
+
     // Respond with serialized body
     res.write_all(&result).await?;
     Ok(())
@@ -92,14 +92,14 @@ async fn main() -> anyhow::Result<()> {
 }
 ```
 
-### Router / MUX
+### Router / router
 
 ```rust
 use uhttp::*;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-  let mut app = uhttp::mux::Router::new();
+  let mut app = uhttp::router::Router::new();
 
   app.get("/foo", |_req, mut res| async move {
     res.write(b"foo\n").await?;

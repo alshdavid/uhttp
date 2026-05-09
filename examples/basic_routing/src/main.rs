@@ -9,7 +9,7 @@ use uhttp::*;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-  let mut app = uhttp::mux::Router::new();
+  let mut app = uhttp::router::Router::new();
 
   app.get("/foo", |_req, mut res| async move {
     res.write(b"foo\n").await?;

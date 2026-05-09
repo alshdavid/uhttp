@@ -1,4 +1,4 @@
-#[cfg(feature = "mux")]
+#[cfg(feature = "router")]
 use std::collections::HashMap;
 use std::io;
 use std::pin::Pin;
@@ -19,7 +19,7 @@ pub struct Request {
   pub(crate) method: Method,
   pub(crate) version: Version,
   pub(crate) uri: Uri,
-  #[cfg(feature = "mux")]
+  #[cfg(feature = "router")]
   pub(crate) params: HashMap<String, String>,
 }
 
@@ -32,12 +32,12 @@ impl Request {
       method: parts.method,
       version: parts.version,
       uri: parts.uri,
-      #[cfg(feature = "mux")]
+      #[cfg(feature = "router")]
       params: HashMap::new(),
     }
   }
 
-  #[cfg(feature = "mux")]
+  #[cfg(feature = "router")]
   pub fn url_param(
     &self,
     name: &str,

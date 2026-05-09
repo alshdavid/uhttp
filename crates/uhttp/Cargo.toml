@@ -8,7 +8,7 @@ repository = "https://github.com/alshdavid/uhttp"
 
 [features]
 json = ["dep:serde", "dep:serde_json"]
-mux = []
+router = []
 
 [lints]
 workspace = true

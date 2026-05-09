@@ -102,7 +102,7 @@ where
           tokio::task::spawn(async move {
             match fut.await {
               Ok(handler_response) => handler_response,
-              Err(handler_error) => panic!("Unable to complete request {}", handler_error),
+              Err(handler_error) => {} //panic!("Unable to complete request {}", handler_error),
             };
           });
 

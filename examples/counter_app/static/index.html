@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Counter App</title>
+</head>
+<body>
+    <h1>Counter App</h1>
+    <p>Count: <span id="counter">0</span></p>
+    <button id="increment">Increment</button>
+    <button id="decrement">Decrement</button>
+
+    <script>
+        let count = 0;
+        const counterElement = document.getElementById('counter');
+        const incrementButton = document.getElementById('increment');
+        const decrementButton = document.getElementById('decrement');
+
+        const eventSource = new EventSource('/api/events/counter');
+
+        eventSource.onmessage = (event) => {
+            counterElement.textContent = event.data;
+        };
+
+        incrementButton.addEventListener('click', async () => {
+            await fetch("/api/counter/increment", { method: "POST" }).then(r => r.ok)
+        });
+
+        decrementButton.addEventListener('click', async () => {
+            await fetch("/api/counter/decrement", { method: "POST" }).then(r => r.ok)
+        });
+    </script>
+</body>
+</html>

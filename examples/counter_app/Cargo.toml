@@ -1,0 +1,13 @@
+[package]
+name = "uhttp_example_counter_app"
+version = "0.1.0"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[dependencies]
+uhttp = { path = "../../crates/uhttp", features = ["router"] }
+tokio = { workspace = true, features = ["full"] }
+anyhow = { workspace = true }
+serde_json = { workspace = true }

@@ -788,6 +788,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "uhttp_example_counter_app"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde_json",
+ "tokio",
+ "uhttp",
+]
+
+[[package]]
 name = "uhttp_example_streamed"
 version = "0.1.0"
 dependencies = [

@@ -154,6 +154,19 @@ impl Router {
       .insert(route, Arc::new(move |req, res| Box::pin(handler(req, res))));
   }
 
+  pub fn any<F, Fut>(
+    &mut self,
+    route: &str,
+    handler: F,
+  ) where
+    F: 'static + Send + Sync + Fn(Request, Response) -> Fut,
+    Fut: 'static + Send + Future<Output = crate::Result<()>>,
+  {
+    let _ = self
+      .any_routes
+      .insert(route, Arc::new(move |req, res| Box::pin(handler(req, res))));
+  }
+
   pub fn handler(&self) -> RouterHandlerFunc {
     let any_routes = Arc::new(self.any_routes.clone());
     let get_routes = Arc::new(self.get_routes.clone());

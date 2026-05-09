@@ -1,14 +1,18 @@
-#![allow(clippy::unused_io_amount)]
-#![allow(dead_code)]
+#![deny(unused_crate_dependencies)]
+mod result;
+
 pub mod body;
 pub mod constants;
 pub mod http;
 pub mod http1;
-#[cfg(feature = "http2")]
-pub mod http2;
-mod result;
+pub use http::*;
+pub use result::*;
 
 #[cfg(feature = "router")]
 pub mod router;
-pub use http::*;
-pub use result::*;
+
+#[cfg(feature = "websocket")]
+pub mod websocket;
+
+#[cfg(feature = "http2")]
+pub mod http2;

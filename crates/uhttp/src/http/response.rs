@@ -13,7 +13,7 @@ use tokio::sync::RwLock;
 
 use super::Headers;
 
-pub(super) enum ResponseState {
+pub(crate) enum ResponseState {
   Builder(
     (
       hyper::http::response::Builder,
@@ -29,8 +29,8 @@ pub(super) enum ResponseState {
 
 #[derive(Clone)]
 pub struct Response {
-  state: Arc<RwLock<ResponseState>>,
-  buffer: Arc<Mutex<Vec<u8>>>,
+  pub(crate) state: Arc<RwLock<ResponseState>>,
+  pub(crate) buffer: Arc<Mutex<Vec<u8>>>,
 }
 
 impl Response {

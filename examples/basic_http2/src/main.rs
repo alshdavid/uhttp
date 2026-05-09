@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use anyhow::Context;
 /*
   Test with:
-    curl http://localhost:8080
+    curl https://localhost:8080
 */
 use uhttp;
 use uhttp::AsyncWriteExt;

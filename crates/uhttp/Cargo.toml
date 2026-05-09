@@ -1,6 +1,6 @@
 [package]
 name = "uhttp"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2024"
 description = "Simple http server for humans"
 license = "MIT"
@@ -19,7 +19,6 @@ hyper = { workspace = true, features = ["http1"] }
 hyper-util = { workspace = true, features = ["server-graceful"] }
 tokio = { workspace = true, features = ["rt-multi-thread", "fs", "net"] }
 tokio-util = { workspace = true, features = ["io", "io-util", "futures-util"] }
-anyhow = { workspace = true }
 futures = { workspace = true }
 http = { workspace = true }
 async_fn_traits = { workspace = true }

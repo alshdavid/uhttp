@@ -13,5 +13,7 @@ async fn main() -> anyhow::Result<()> {
     return Ok(());
   })
   .listen("0.0.0.0:8080")
-  .await
+  .await?;
+
+  Ok(())
 }

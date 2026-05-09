@@ -25,5 +25,7 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
   })
   .listen("0.0.0.0:8080")
-  .await
+  .await?;
+
+  Ok(())
 }

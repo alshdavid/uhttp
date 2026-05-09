@@ -54,14 +54,14 @@ impl Response {
   pub async fn write_head(
     &self,
     status: http::StatusCode,
-  ) -> anyhow::Result<()> {
+  ) -> crate::Result<()> {
     let mut guard = self.state.write().await;
 
     let (mut builder, tx_res) = match std::mem::replace(&mut *guard, ResponseState::Pending) {
       ResponseState::Builder(builder) => builder,
-      ResponseState::Stream(_response) => return Err(anyhow::anyhow!("Already wrote head")),
-      ResponseState::Done => return Err(anyhow::anyhow!("Response has ended")),
-      ResponseState::Pending => return Err(anyhow::anyhow!("Currently Writing")),
+      ResponseState::Stream(_response) => return Err(crate::Error::generic("Already wrote head")),
+      ResponseState::Done => return Err(crate::Error::generic("Response has ended")),
+      ResponseState::Pending => return Err(crate::Error::generic("Currently Writing")),
     };
 
     builder = builder.status(status);
@@ -80,7 +80,7 @@ impl Response {
       builder.body(boxed_body)?;
 
     if tx_res.send(res).is_err() {
-      return Err(anyhow::anyhow!("Failed to send request"));
+      return Err(crate::Error::generic("Failed to send request"));
     };
 
     let mut buffer = self.buffer.lock().await;
@@ -98,15 +98,15 @@ impl Response {
   }
 
   /// End the http response, nothing can be sent after this is called
-  pub async fn end(&self) -> anyhow::Result<()> {
+  pub async fn end(&self) -> crate::Result<()> {
     let mut guard = self.state.write().await;
 
     let inner = std::mem::replace(&mut *guard, ResponseState::Pending);
     match inner {
-      ResponseState::Builder(_builder) => return Err(anyhow::anyhow!("Already wrote head")),
-      ResponseState::Stream(_response) => return Err(anyhow::anyhow!("Already wrote head")),
-      ResponseState::Done => return Err(anyhow::anyhow!("Response has ended")),
-      ResponseState::Pending => return Err(anyhow::anyhow!("Currently Writing")),
+      ResponseState::Builder(_builder) => return Err(crate::Error::generic("Already wrote head")),
+      ResponseState::Stream(_response) => return Err(crate::Error::generic("Already wrote head")),
+      ResponseState::Done => return Err(crate::Error::generic("Response has ended")),
+      ResponseState::Pending => return Err(crate::Error::generic("Currently Writing")),
     };
   }
 }

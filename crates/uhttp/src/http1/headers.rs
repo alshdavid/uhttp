@@ -16,23 +16,23 @@ impl Headers {
     Self { state: headers }
   }
 
-  pub async fn inner_cloned(&self) -> anyhow::Result<HeaderMap> {
+  pub async fn inner_cloned(&self) -> crate::Result<HeaderMap> {
     let guard = self.state.read().await;
     match &*guard {
       ResponseState::Builder((builder, _)) => {
         if let Some(headers) = builder.headers_ref().cloned() {
           return Ok(headers);
         };
-        return Err(anyhow::anyhow!("No headers present"));
+        return Err(crate::Error::generic("No headers present"));
       }
       ResponseState::Stream(_) => {
-        return Err(anyhow::anyhow!("Headers already sent"));
+        return Err(crate::Error::generic("Headers already sent"));
       }
       ResponseState::Done => {
-        return Err(anyhow::anyhow!("Request already sent"));
+        return Err(crate::Error::generic("Request already sent"));
       }
       ResponseState::Pending => {
-        return Err(anyhow::anyhow!("Request currently sending"));
+        return Err(crate::Error::generic("Request currently sending"));
       }
     }
   }
@@ -40,7 +40,7 @@ impl Headers {
   pub async fn replace(
     &mut self,
     headers: HeaderMap,
-  ) -> anyhow::Result<()> {
+  ) -> crate::Result<()> {
     let mut guard = self.state.write().await;
     match &mut *guard {
       ResponseState::Builder((builder, _)) => {
@@ -50,13 +50,13 @@ impl Headers {
         Ok(())
       }
       ResponseState::Stream(_) => {
-        return Err(anyhow::anyhow!("Headers already sent"));
+        return Err(crate::Error::generic("Headers already sent"));
       }
       ResponseState::Done => {
-        return Err(anyhow::anyhow!("Request already sent"));
+        return Err(crate::Error::generic("Request already sent"));
       }
       ResponseState::Pending => {
-        return Err(anyhow::anyhow!("Request currently sending"));
+        return Err(crate::Error::generic("Request currently sending"));
       }
     }
   }
@@ -65,29 +65,29 @@ impl Headers {
     &mut self,
     key: &str,
     value: &str,
-  ) -> anyhow::Result<bool> {
+  ) -> crate::Result<bool> {
     let mut guard = self.state.write().await;
     match &mut *guard {
       ResponseState::Builder((builder, _)) => {
         let Some(headers) = builder.headers_mut() else {
-          return Err(anyhow::anyhow!("No headers"));
+          return Err(crate::Error::generic("No headers"));
         };
         let Ok(header) = HeaderValue::from_str(value) else {
-          return Err(anyhow::anyhow!("Invalid header value"));
+          return Err(crate::Error::generic("Invalid header value"));
         };
         let Ok(key) = HeaderName::from_bytes(key.as_bytes()) else {
-          return Err(anyhow::anyhow!("Invalid header key"));
+          return Err(crate::Error::generic("Invalid header key"));
         };
         return Ok(headers.append(key, header));
       }
       ResponseState::Stream(_) => {
-        return Err(anyhow::anyhow!("Headers already sent"));
+        return Err(crate::Error::generic("Headers already sent"));
       }
       ResponseState::Done => {
-        return Err(anyhow::anyhow!("Request already sent"));
+        return Err(crate::Error::generic("Request already sent"));
       }
       ResponseState::Pending => {
-        return Err(anyhow::anyhow!("Request currently sending"));
+        return Err(crate::Error::generic("Request currently sending"));
       }
     };
   }
@@ -96,35 +96,35 @@ impl Headers {
     &mut self,
     key: &str,
     value: &str,
-  ) -> anyhow::Result<Option<String>> {
+  ) -> crate::Result<Option<String>> {
     let mut guard = self.state.write().await;
     match &mut *guard {
       ResponseState::Builder((builder, _)) => {
         let Some(headers) = builder.headers_mut() else {
-          return Err(anyhow::anyhow!("No headers"));
+          return Err(crate::Error::generic("No headers"));
         };
         let Ok(header) = HeaderValue::from_str(value) else {
-          return Err(anyhow::anyhow!("Invalid header value"));
+          return Err(crate::Error::generic("Invalid header value"));
         };
         let Ok(key) = HeaderName::from_bytes(key.as_bytes()) else {
-          return Err(anyhow::anyhow!("Invalid header key"));
+          return Err(crate::Error::generic("Invalid header key"));
         };
         if let Some(prev) = headers.insert(key, header) {
           if let Ok(prev) = prev.to_str() {
             return Ok(Some(prev.to_string()));
           }
-          return Err(anyhow::anyhow!("Unable to parse existing header"));
+          return Err(crate::Error::generic("Unable to parse existing header"));
         };
         return Ok(None);
       }
       ResponseState::Stream(_) => {
-        return Err(anyhow::anyhow!("Headers already sent"));
+        return Err(crate::Error::generic("Headers already sent"));
       }
       ResponseState::Done => {
-        return Err(anyhow::anyhow!("Request already sent"));
+        return Err(crate::Error::generic("Request already sent"));
       }
       ResponseState::Pending => {
-        return Err(anyhow::anyhow!("Request currently sending"));
+        return Err(crate::Error::generic("Request currently sending"));
       }
     };
   }

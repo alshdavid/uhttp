@@ -14,14 +14,14 @@ type HandlerFunc = Arc<
   dyn 'static
     + Send
     + Sync
-    + Fn(Request, Response) -> Pin<Box<dyn 'static + Send + Future<Output = anyhow::Result<()>>>>,
+    + Fn(Request, Response) -> Pin<Box<dyn 'static + Send + Future<Output = crate::Result<()>>>>,
 >;
 
 type RouterHandlerFunc = Box<
   dyn 'static
     + Send
     + Sync
-    + Fn(Request, Response) -> Pin<Box<dyn 'static + Send + Future<Output = anyhow::Result<()>>>>,
+    + Fn(Request, Response) -> Pin<Box<dyn 'static + Send + Future<Output = crate::Result<()>>>>,
 >;
 
 pub struct Router {
@@ -56,7 +56,7 @@ impl Router {
     handler: F,
   ) where
     F: 'static + Send + Sync + Fn(Request, Response) -> Fut,
-    Fut: 'static + Send + Future<Output = anyhow::Result<()>>,
+    Fut: 'static + Send + Future<Output = crate::Result<()>>,
   {
     self
       .fallback
@@ -69,7 +69,7 @@ impl Router {
     handler: F,
   ) where
     F: 'static + Send + Sync + Fn(Request, Response) -> Fut,
-    Fut: 'static + Send + Future<Output = anyhow::Result<()>>,
+    Fut: 'static + Send + Future<Output = crate::Result<()>>,
   {
     let _ = self
       .get_routes
@@ -82,7 +82,7 @@ impl Router {
     handler: F,
   ) where
     F: 'static + Send + Sync + Fn(Request, Response) -> Fut,
-    Fut: 'static + Send + Future<Output = anyhow::Result<()>>,
+    Fut: 'static + Send + Future<Output = crate::Result<()>>,
   {
     let _ = self
       .post_routes
@@ -95,7 +95,7 @@ impl Router {
     handler: F,
   ) where
     F: 'static + Send + Sync + Fn(Request, Response) -> Fut,
-    Fut: 'static + Send + Future<Output = anyhow::Result<()>>,
+    Fut: 'static + Send + Future<Output = crate::Result<()>>,
   {
     let _ = self
       .put_routes
@@ -108,7 +108,7 @@ impl Router {
     handler: F,
   ) where
     F: 'static + Send + Sync + Fn(Request, Response) -> Fut,
-    Fut: 'static + Send + Future<Output = anyhow::Result<()>>,
+    Fut: 'static + Send + Future<Output = crate::Result<()>>,
   {
     let _ = self
       .patch_routes
@@ -121,7 +121,7 @@ impl Router {
     handler: F,
   ) where
     F: 'static + Send + Sync + Fn(Request, Response) -> Fut,
-    Fut: 'static + Send + Future<Output = anyhow::Result<()>>,
+    Fut: 'static + Send + Future<Output = crate::Result<()>>,
   {
     let _ = self
       .delete_routes
@@ -134,7 +134,7 @@ impl Router {
     handler: F,
   ) where
     F: 'static + Send + Sync + Fn(Request, Response) -> Fut,
-    Fut: 'static + Send + Future<Output = anyhow::Result<()>>,
+    Fut: 'static + Send + Future<Output = crate::Result<()>>,
   {
     let _ = self
       .head_routes
@@ -147,7 +147,7 @@ impl Router {
     handler: F,
   ) where
     F: 'static + Send + Sync + Fn(Request, Response) -> Fut,
-    Fut: 'static + Send + Future<Output = anyhow::Result<()>>,
+    Fut: 'static + Send + Future<Output = crate::Result<()>>,
   {
     let _ = self
       .connect_routes

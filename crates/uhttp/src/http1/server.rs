@@ -18,7 +18,7 @@ use super::Response;
 pub struct Http1Server<F, Fut>
 where
   F: 'static + Send + Sync + Fn(Request, Response) -> Fut,
-  Fut: 'static + Send + Future<Output = anyhow::Result<()>>,
+  Fut: 'static + Send + Future<Output = crate::Result<()>>,
 {
   handle_func: Arc<F>,
 }
@@ -26,7 +26,7 @@ where
 impl<F, Fut> Http1Server<F, Fut>
 where
   F: 'static + Send + Sync + Fn(Request, Response) -> Fut,
-  Fut: 'static + Send + Future<Output = anyhow::Result<()>>,
+  Fut: 'static + Send + Future<Output = crate::Result<()>>,
 {
   pub fn new(handle_func: F) -> Self {
     Self {
@@ -37,7 +37,7 @@ where
   pub async fn listen(
     &self,
     addr: impl ToSocketAddrs,
-  ) -> anyhow::Result<()> {
+  ) -> crate::Result<()> {
     let listener: TcpListener = TcpListener::bind(&addr).await?;
     let handler_func_ref = Arc::clone(&self.handle_func);
 
@@ -67,12 +67,13 @@ where
           });
 
           async move {
-            Ok::<HyperResponse<BoxBody<HyperBytes, Infallible>>, anyhow::Error>(
-              match rx_res.await {
-                Ok(res) => res,
-                Err(err) => handle_error(anyhow::anyhow!("Unable to complete request {}", err)),
-              },
-            )
+            Ok::<HyperResponse<BoxBody<HyperBytes, Infallible>>, crate::Error>(match rx_res.await {
+              Ok(res) => res,
+              Err(err) => handle_error(crate::Error::generic(format!(
+                "Unable to complete request {}",
+                err
+              ))),
+            })
           }
         });
 
@@ -85,7 +86,7 @@ where
   }
 }
 
-fn handle_error(error: anyhow::Error) -> HyperResponse<BoxBody<HyperBytes, Infallible>> {
+fn handle_error(error: crate::Error) -> HyperResponse<BoxBody<HyperBytes, Infallible>> {
   let content = HyperBytes::from(format!("{}", error));
   let body = BoxBody::new(Full::new(content));
   let response = HyperResponse::builder().status(500).body(body);

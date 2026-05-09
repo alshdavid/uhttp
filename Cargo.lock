@@ -478,9 +478,8 @@ dependencies = [
 
 [[package]]
 name = "uhttp"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
- "anyhow",
  "async_fn_traits",
  "futures",
  "http",

@@ -45,5 +45,7 @@ async fn main() -> anyhow::Result<()> {
 
   uhttp::http1::create_server(app.handler())
     .listen("0.0.0.0:8080")
-    .await
+    .await?;
+
+  Ok(())
 }

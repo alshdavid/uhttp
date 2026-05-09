@@ -18,12 +18,15 @@ async fn main() -> anyhow::Result<()> {
     let body = uhttp::body::json::<BodyJson>(&mut req.body()).await?;
 
     // Serialize response body
-    let result = serde_json::to_vec(&body)?;
+    let result = serde_json::to_vec(&body)
+      .map_err(|_| uhttp::Error::generic("Failed to serialise response"))?;
 
     // Respond with serialized body
     res.write_all(&result).await?;
     Ok(())
   })
   .listen("0.0.0.0:8080")
-  .await
+  .await?;
+
+  Ok(())
 }

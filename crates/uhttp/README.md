@@ -14,6 +14,7 @@
 cargo add uhttp
 cargo add uhttp -F json
 cargo add uhttp -F router
+cargo add uhttp -F http2
 ```
 
 ## Usage

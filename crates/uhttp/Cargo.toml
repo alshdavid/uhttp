@@ -9,6 +9,7 @@ repository = "https://github.com/alshdavid/uhttp"
 [features]
 json = ["dep:serde", "dep:serde_json"]
 router = ["dep:percent-encoding", "dep:path-tree"]
+http2 = ["dep:tokio-rustls", "dep:rustls-pemfile"]
 
 [lints]
 workspace = true
@@ -22,8 +23,8 @@ hyper-util = { workspace = true, features = ["server-graceful", "server-auto"] }
 tokio = { workspace = true, features = ["rt-multi-thread", "fs", "net"] }
 tokio-util = { workspace = true, features = ["io", "io-util", "futures-util"] }
 
-tokio-rustls = { workspace = true }
-rustls-pemfile = { workspace = true }
+tokio-rustls = { workspace = true, optional = true }
+rustls-pemfile = { workspace = true, optional = true }
 
 # Optional dependencies for JSON support
 serde = { workspace = true, features = ["derive"], optional = true }

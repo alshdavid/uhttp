@@ -7,16 +7,15 @@ use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::mpsc::unbounded_channel;
 
-#[derive(Clone)]
 pub struct CoutnerService {
-  value: Arc<AtomicIsize>,
-  subscriptions: Arc<Mutex<Vec<UnboundedSender<()>>>>,
+  value: AtomicIsize,
+  subscriptions: Mutex<Vec<UnboundedSender<()>>>,
 }
 
 impl CoutnerService {
   pub fn new() -> Self {
     Self {
-      value: Arc::new(AtomicIsize::new(0)),
+      value: AtomicIsize::new(0),
       subscriptions: Default::default(),
     }
   }

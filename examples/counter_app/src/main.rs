@@ -5,6 +5,7 @@
 mod counter_service;
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use uhttp;
 use uhttp::AsyncWriteExt;
@@ -15,17 +16,15 @@ static CARGO_MANIFEST_DIR: &str = env!("CARGO_MANIFEST_DIR");
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-  println!("{}", CARGO_MANIFEST_DIR);
-
   let mut app = uhttp::router::Router::new();
 
-  let counter_service = CoutnerService::new();
+  let counter_service = Arc::new(CoutnerService::new());
 
   // Get current value
   app.get("/api/counter", {
-    let counter_service = counter_service.clone();
+    let counter_service = Arc::clone(&counter_service);
     move |_req, mut res| {
-      let counter_service = counter_service.clone();
+      let counter_service = Arc::clone(&counter_service);
       async move {
         let counter_value = counter_service.get();
 
@@ -45,15 +44,15 @@ async fn main() -> anyhow::Result<()> {
 
   // Event Source that emits when the value is updated
   app.get("/api/events/counter", {
-    let counter_service = counter_service.clone();
+    let counter_service = Arc::clone(&counter_service);
     move |_req, mut res| {
-      let counter_service = counter_service.clone();
+      let counter_service = Arc::clone(&counter_service);
       async move {
         res
           .header()
           .add("Content-Type", "text/event-stream")
           .await?;
-        
+
         res.header().add("Transfer-Encoding", "chunked").await?;
         res.write_head(uhttp::StatusCode::OK).await?;
 
@@ -65,10 +64,8 @@ async fn main() -> anyhow::Result<()> {
         // Listen for updates
         let mut rx = counter_service.subsribe().await;
         while let Some(_) = rx.recv().await {
-          res.write_all(b"data: updated\n\n").await?;
-          res
-            .write_all(format!("data: {}\n\n", counter_service.get()).as_bytes())
-            .await?;
+          let msg = format!("data: {}\n\n", counter_service.get());
+          res.write_all(msg.as_bytes()).await?;
         }
 
         Ok(())
@@ -77,9 +74,9 @@ async fn main() -> anyhow::Result<()> {
   });
 
   app.post("/api/counter/increment", {
-    let counter_service = counter_service.clone();
+    let counter_service = Arc::clone(&counter_service);
     move |_req, res| {
-      let counter_service = counter_service.clone();
+      let counter_service = Arc::clone(&counter_service);
       async move {
         counter_service.increment().await;
         res.write_head(uhttp::StatusCode::NO_CONTENT).await?;
@@ -89,9 +86,9 @@ async fn main() -> anyhow::Result<()> {
   });
 
   app.post("/api/counter/decrement", {
-    let counter_service = counter_service.clone();
+    let counter_service = Arc::clone(&counter_service);
     move |_req, res| {
-      let counter_service = counter_service.clone();
+      let counter_service = Arc::clone(&counter_service);
       async move {
         counter_service.decrement().await;
         res.write_head(uhttp::StatusCode::NO_CONTENT).await?;
@@ -113,6 +110,7 @@ async fn main() -> anyhow::Result<()> {
       res.write_head(uhttp::StatusCode::NOT_FOUND).await?;
       return Ok(());
     };
+    
     res.write_head(uhttp::StatusCode::OK).await?;
     tokio::io::copy(&mut file, &mut res).await?;
     Ok(())

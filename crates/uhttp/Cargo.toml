@@ -1,6 +1,6 @@
 [package]
 name = "uhttp"
-version = "0.6.0"
+version = "0.7.0"
 edition = "2024"
 description = "Simple http server for humans"
 license = "MIT"
@@ -8,21 +8,24 @@ repository = "https://github.com/alshdavid/uhttp"
 
 [features]
 json = ["dep:serde", "dep:serde_json"]
-router = []
+router = ["dep:percent-encoding", "dep:path-tree"]
 
 [lints]
 workspace = true
 
 [dependencies]
+futures = { workspace = true }
+http = { workspace = true }
 http-body-util = { workspace = true }
 hyper = { workspace = true, features = ["http1"] }
 hyper-util = { workspace = true, features = ["server-graceful"] }
 tokio = { workspace = true, features = ["rt-multi-thread", "fs", "net"] }
 tokio-util = { workspace = true, features = ["io", "io-util", "futures-util"] }
-futures = { workspace = true }
-http = { workspace = true }
-async_fn_traits = { workspace = true }
+
+# Optional dependencies for JSON support
 serde = { workspace = true, features = ["derive"], optional = true }
 serde_json = { workspace = true, optional = true }
-path-tree = { workspace = true }
-percent-encoding = { workspace = true }
+
+# Optional dependencies for router support
+path-tree = { workspace = true, optional = true }
+percent-encoding = { workspace = true, optional = true }

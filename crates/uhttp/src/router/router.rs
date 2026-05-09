@@ -7,8 +7,8 @@ use path_tree::PathTree;
 use percent_encoding::percent_decode_str;
 use tokio::io::AsyncWriteExt;
 
-use crate::http1::Request;
-use crate::http1::Response;
+use crate::Request;
+use crate::Response;
 
 type HandlerFunc = Arc<
   dyn 'static

@@ -1,8 +1,8 @@
 use std::future::Future;
 
 use super::Http1Server;
-use super::Request;
-use super::Response;
+use crate::Request;
+use crate::Response;
 
 pub fn create_server<F, Fut>(handle_func: F) -> Http1Server<F, Fut>
 where

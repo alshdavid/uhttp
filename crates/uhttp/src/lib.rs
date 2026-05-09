@@ -2,12 +2,12 @@
 #![allow(dead_code)]
 pub mod body;
 pub mod constants;
+pub mod http;
 pub mod http1;
+pub mod http2;
 mod result;
 
 #[cfg(feature = "router")]
 pub mod router;
-pub use http::StatusCode;
+pub use http::*;
 pub use result::*;
-pub use tokio::io::AsyncReadExt;
-pub use tokio::io::AsyncWriteExt;

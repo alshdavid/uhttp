@@ -110,7 +110,7 @@ async fn main() -> anyhow::Result<()> {
       res.write_head(uhttp::StatusCode::NOT_FOUND).await?;
       return Ok(());
     };
-    
+
     res.write_head(uhttp::StatusCode::OK).await?;
     tokio::io::copy(&mut file, &mut res).await?;
     Ok(())

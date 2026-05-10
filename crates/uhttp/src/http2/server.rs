@@ -117,6 +117,13 @@ where
           }
         });
 
+        #[cfg(feature = "websocket")]
+        service_builder
+          .serve_connection_with_upgrades(io, service_handler)
+          .await
+          .ok();
+
+        #[cfg(not(feature = "websocket"))]
         service_builder
           .serve_connection(io, service_handler)
           .await

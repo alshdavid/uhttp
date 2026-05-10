@@ -6,9 +6,10 @@ use http_body_util::Full;
 use http_body_util::combinators::BoxBody;
 use hyper::Response as HyperResponse;
 use hyper::body::Bytes as HyperBytes;
-use hyper::server::conn::http1;
 use hyper::service::service_fn;
+use hyper_util::rt::TokioExecutor;
 use hyper_util::rt::TokioIo;
+use hyper_util::server::conn::auto;
 use tokio::net::TcpListener;
 use tokio::net::ToSocketAddrs;
 
@@ -51,7 +52,7 @@ where
       tokio::task::spawn(async move {
         let io = TokioIo::new(stream);
 
-        let service_builder = http1::Builder::new();
+        let service_builder = auto::Builder::new(TokioExecutor::new());
         let service_handler = service_fn(move |req| {
           let request = Request::new(req);
 
@@ -78,6 +79,13 @@ where
           }
         });
 
+        #[cfg(feature = "websocket")]
+        service_builder
+          .serve_connection_with_upgrades(io, service_handler)
+          .await
+          .ok();
+
+        #[cfg(not(feature = "websocket"))]
         service_builder
           .serve_connection(io, service_handler)
           .await

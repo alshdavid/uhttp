@@ -19,6 +19,7 @@ pub struct Request {
   pub(crate) method: Method,
   pub(crate) version: Version,
   pub(crate) uri: Uri,
+  #[cfg(feature = "websocket")]
   pub(crate) extensions: hyper::http::Extensions,
   #[cfg(feature = "router")]
   pub(crate) params: HashMap<String, String>,
@@ -33,6 +34,7 @@ impl Request {
       method: parts.method,
       version: parts.version,
       uri: parts.uri,
+      #[cfg(feature = "websocket")]
       extensions: parts.extensions,
       #[cfg(feature = "router")]
       params: HashMap::new(),

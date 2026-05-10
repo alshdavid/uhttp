@@ -1041,9 +1041,17 @@ name = "uhttp_example_websocket"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "base64",
  "serde_json",
- "sha1 0.11.0",
+ "tokio",
+ "uhttp",
+]
+
+[[package]]
+name = "uhttp_example_websocket_chat"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde_json",
  "tokio",
  "uhttp",
 ]

@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Counter App</title>
+    <style>
+      html,
+      body {
+        height: 100dvh;
+        margin: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        display: flex;
+        flex-direction: column;
+      }
+
+      main {
+        flex: 1;
+
+        & > div {
+          display: flex;
+
+          div:first-child {
+            font-weight: 600;
+            margin-right: 8px;
+          }
+        }
+      }
+
+      footer {
+        display: flex;
+
+        input:first-child {
+          width: 100px;
+        }
+
+        input:last-of-type {
+          flex: 1;
+          width: 100%;
+        }
+
+        input {
+          height: 28px;
+        }
+
+        button {
+          width: 60px;
+        }
+      }
+    </style>
+    <script type="module">
+      import {
+        html,
+        Component,
+        render,
+        useState,
+        useEffect,
+      } from "https://unpkg.com/htm/preact/standalone.module.js";
+
+      const socket = new WebSocket(`${window.location.origin}/api/ws`);
+
+      function App() {
+        const [author, setAuthor] = useState("anonymous");
+        const [message, setMessage] = useState();
+
+        const [messages, setMessages] = useState([]);
+
+        useEffect(() => {
+          const onMessage = (event) => {
+            setMessages((messages) => [...messages, ...JSON.parse(event.data)]);
+          };
+          socket.addEventListener("message", onMessage);
+          return () => socket.removeEventListener("message", onMessage);
+        }, [socket]);
+
+        function sendMessage() {
+          socket.send(JSON.stringify([author, message]));
+          setMessage("");
+        }
+
+        const handleKeyDown = (event) => {
+          if (event.key === "Enter") {
+            sendMessage();
+          }
+        };
+
+        return html`
+          <main>
+            ${messages.map(
+              ([author, message]) => html`
+                <div>
+                  <div>${author}:</div>
+                  <div>${message}</div>
+                </div>
+              `,
+            )}
+          </main>
+          <footer>
+            <input
+              type="text"
+              placeholder="username"
+              onInput=${(e) => setAuthor(e.target.value)}
+              value=${author}
+            />
+            <input
+              type="text"
+              placeholder="message"
+              onKeyDown=${handleKeyDown}
+              onInput=${(e) => setMessage(e.target.value)}
+              value=${message}
+            />
+            <button onClick=${sendMessage}>Send</button>
+          </footer>
+        `;
+      }
+
+      render(html`<${App} />`, document.body);
+    </script>
+  </head>
+  <body></body>
+</html>

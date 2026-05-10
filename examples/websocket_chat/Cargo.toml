@@ -1,5 +1,5 @@
 [package]
-name = "uhttp_example_websocket"
+name = "uhttp_example_websocket_chat"
 version = "0.1.0"
 edition = "2024"
 

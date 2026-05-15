@@ -1,4 +1,5 @@
 mod bytes;
+mod handler_func;
 mod headers;
 mod request;
 mod res_ext;
@@ -9,6 +10,7 @@ pub use tokio::io::AsyncReadExt;
 pub use tokio::io::AsyncWriteExt;
 
 pub use self::bytes::*;
+pub use self::handler_func::*;
 pub use self::headers::*;
 pub use self::request::*;
 pub use self::res_ext::*;

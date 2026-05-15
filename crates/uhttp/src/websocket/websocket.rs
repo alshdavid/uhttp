@@ -114,7 +114,7 @@ pub struct WebsocketReciever(
 );
 
 impl WebsocketReciever {
-  pub async fn next(&mut self) -> Option<Result<WebsocketMessage, crate::Error>> {
+  pub async fn next(&mut self) -> Option<crate::Result<WebsocketMessage>> {
     match self.0.next().await {
       Some(Ok(v)) => Some(Ok(v)),
       Some(Err(err)) => Some(Err(crate::Error::generic(format!("{:?}", err)))),
@@ -122,7 +122,7 @@ impl WebsocketReciever {
     }
   }
 
-  pub async fn next_text(&mut self) -> Option<Result<String, crate::Error>> {
+  pub async fn next_text(&mut self) -> Option<crate::Result<String>> {
     match self.0.next().await {
       Some(Ok(WebsocketMessage::Text(text))) => Some(Ok(text.to_string())),
       None => None,

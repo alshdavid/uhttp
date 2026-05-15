@@ -16,6 +16,7 @@ cargo add uhttp -F json       # JSON deserializtion
 cargo add uhttp -F router     # Router for URLs
 cargo add uhttp -F http2      # Support for HTTP/2 with SSL
 cargo add uhttp -F websocket  # Support for Websockets
+cargo add uhttp -F anyhow     # Support for error handling with anyhow
 ```
 
 ## Usage

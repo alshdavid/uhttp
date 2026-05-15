@@ -133,7 +133,7 @@ where
   }
 }
 
-fn handle_error(error: crate::Error) -> HyperResponse<BoxBody<HyperBytes, Infallible>> {
+fn handle_error(error: impl std::fmt::Display) -> HyperResponse<BoxBody<HyperBytes, Infallible>> {
   let content = HyperBytes::from(format!("{}", error));
   let body = BoxBody::new(Full::new(content));
   let response = HyperResponse::builder().status(500).body(body);

@@ -950,8 +950,9 @@ checksum = "40ce102ab67701b8526c123c1bab5cbe42d7040ccfd0f64af1a385808d2f43de"
 
 [[package]]
 name = "uhttp"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
+ "anyhow",
  "base64",
  "futures",
  "http",
@@ -975,6 +976,16 @@ name = "uhttp_example_basic"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "tokio",
+ "uhttp",
+]
+
+[[package]]
+name = "uhttp_example_basic_anyhow"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde_json",
  "tokio",
  "uhttp",
 ]

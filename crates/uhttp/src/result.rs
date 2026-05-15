@@ -1,3 +1,7 @@
+#[cfg(feature = "anyhow")]
+pub type Result<T> = anyhow::Result<T>;
+
+#[cfg(not(feature = "anyhow"))]
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug)]
@@ -8,12 +12,24 @@ pub enum Error {
 }
 
 impl Error {
+  #[cfg(not(feature = "anyhow"))]
   pub fn generic(message: impl AsRef<str>) -> Self {
     Self::Generic(message.as_ref().to_string())
   }
 
+  #[cfg(feature = "anyhow")]
+  pub fn generic(message: impl AsRef<str>) -> anyhow::Error {
+    anyhow::anyhow!("{}", message.as_ref())
+  }
+
+  #[cfg(not(feature = "anyhow"))]
   pub fn generic_err(message: impl AsRef<str>) -> Result<()> {
     Err(Self::Generic(message.as_ref().to_string()))
+  }
+
+  #[cfg(feature = "anyhow")]
+  pub fn generic_err(message: impl AsRef<str>) -> Result<()> {
+    return Err(anyhow::anyhow!("{}", message.as_ref()));
   }
 }
 

@@ -1,12 +1,13 @@
 [package]
 name = "uhttp"
-version = "0.10.0"
+version = "0.11.0"
 edition = "2024"
 description = "Simple http server for humans"
 license = "MIT"
 repository = "https://github.com/alshdavid/uhttp"
 
 [features]
+anyhow = ["dep:anyhow"]
 json = ["dep:serde", "dep:serde_json"]
 router = ["dep:percent-encoding", "dep:path-tree"]
 http2 = ["dep:tokio-rustls", "dep:rustls-pemfile"]
@@ -26,6 +27,9 @@ tokio-util = { workspace = true, features = ["io", "io-util", "futures-util"] }
 
 tokio-rustls = { workspace = true, optional = true }
 rustls-pemfile = { workspace = true, optional = true }
+
+# Optional dependencies for JSON support
+anyhow = { workspace = true, optional = true }
 
 # Optional dependencies for JSON support
 serde = { workspace = true, features = ["derive"], optional = true }

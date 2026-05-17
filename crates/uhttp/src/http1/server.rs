@@ -60,21 +60,27 @@ where
           let response = Response::new(tx_res, HyperResponse::builder());
 
           let fut = handler_func_ref(request, response);
+          let (tx_fut_res, mut rx_fut_res) = tokio::sync::oneshot::channel::<crate::Result<()>>();
 
           tokio::task::spawn(async move {
             match fut.await {
               Ok(_handler_response) => {}
-              Err(_handler_error) => {}
+              Err(handler_error) => drop(tx_fut_res.send(Err(handler_error))),
             };
           });
 
           async move {
             Ok::<HyperResponse<BoxBody<HyperBytes, Infallible>>, crate::Error>(match rx_res.await {
-              Ok(res) => res,
-              Err(err) => handle_error(crate::Error::generic(format!(
-                "Unable to complete request {}",
-                err
-              ))),
+              Ok(res) => {
+                if let Ok(Err(err)) = rx_fut_res.try_recv() {
+                  return Ok(handle_error(crate::Error::generic(format!("{}", err))));
+                };
+                res
+              }
+              Err(err) => {
+                let x = handle_error(crate::Error::generic(format!("{}", err)));
+                x
+              }
             })
           }
         });

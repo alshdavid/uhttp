@@ -128,7 +128,7 @@ impl Drop for Response {
           let b2 = http_body_util::Full::new(b);
           let body = http_body_util::combinators::BoxBody::new(b2);
           let res = builder.status(200).body(body).unwrap();
-          tx_res.send(res).unwrap();
+          drop(tx_res.send(res));
         }
         ResponseState::Stream(_response) => {}
         ResponseState::Done => {}

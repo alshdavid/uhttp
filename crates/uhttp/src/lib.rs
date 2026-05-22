@@ -1,10 +1,12 @@
 #![deny(unused_crate_dependencies)]
 mod result;
 
+pub mod file_server;
 pub mod body;
 pub mod constants;
 pub mod http;
 pub mod http1;
+
 pub use http::*;
 pub use result::*;
 

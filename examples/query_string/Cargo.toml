@@ -1,0 +1,12 @@
+[package]
+name = "uhttp_example_query_string"
+version = "0.1.0"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[dependencies]
+uhttp = { path = "../../crates/uhttp", features = ["query"] }
+tokio = { workspace = true, features = ["full"] }
+anyhow = { workspace = true }

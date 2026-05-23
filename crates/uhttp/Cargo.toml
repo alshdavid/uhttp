@@ -1,6 +1,6 @@
 [package]
 name = "uhttp"
-version = "0.13.0"
+version = "0.14.0"
 edition = "2024"
 description = "Simple http server for humans"
 license = "MIT"
@@ -9,6 +9,7 @@ repository = "https://github.com/alshdavid/uhttp"
 [features]
 anyhow = ["dep:anyhow"]
 json = ["dep:serde", "dep:serde_json"]
+query = ["dep:serde", "dep:serde_urlencoded"]
 router = ["dep:percent-encoding", "dep:path-tree"]
 http2 = ["dep:tokio-rustls", "dep:rustls-pemfile"]
 websocket = ["dep:sha1", "dep:base64", "dep:tokio-tungstenite"]
@@ -50,6 +51,8 @@ percent-encoding = { workspace = true, optional = true }
 base64 = { workspace = true, optional = true }
 sha1 = { workspace = true, optional = true }
 tokio-tungstenite = { workspace = true, optional = true }
+
+# Optional dependencies for Static File Server
 mime_guess = { workspace = true, optional = true }
 xxhash-rust = { workspace = true, optional = true, features = ["xxh3"] }
 async-compression = { workspace = true, optional = true, features = [
@@ -58,6 +61,11 @@ async-compression = { workspace = true, optional = true, features = [
   "brotli",
   "zstd",
 ] }
+
+# Optional dependencies for Static File Server (Embedded)
 include_dir = { workspace = true, optional = true }
 flate2 = { workspace = true, optional = true }
 brotli = { workspace = true, optional = true }
+
+# Optional dependencies for query string parsing
+serde_urlencoded = { workspace = true, optional = true }

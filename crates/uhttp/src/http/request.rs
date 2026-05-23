@@ -49,6 +49,18 @@ impl Request {
     self.params.get(name)
   }
 
+  #[cfg(feature = "query")]
+  pub fn parse_query<T: serde::de::DeserializeOwned>(&self) -> crate::Result<T> {
+    let Some(query_str) = self.uri().query() else {
+      return Err(crate::Error::generic("No query string"));
+    };
+
+    match serde_urlencoded::from_str::<T>(query_str) {
+      Ok(query) => Ok(query),
+      Err(err) => Err(crate::Error::generic(format!("{:?}", err))),
+    }
+  }
+
   pub fn body(&mut self) -> &mut Box<dyn AsyncRead + Unpin + Send + Sync> {
     &mut self.inner
   }

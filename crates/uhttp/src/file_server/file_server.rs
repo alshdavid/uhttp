@@ -137,7 +137,7 @@ fn determine_file(input: &str) -> PathBuf {
   }
 }
 
-pub async fn etag_file(
+async fn etag_file(
   file: &mut tokio::fs::File,
   strategy: &ETagStrategy,
   encoding: &str,
@@ -179,7 +179,7 @@ pub async fn etag_file(
   }
 }
 
-pub async fn gzip_stream<R, W>(
+async fn gzip_stream<R, W>(
   input: R,
   output: &mut W,
 ) -> Result<u64, std::io::Error>
@@ -192,7 +192,7 @@ where
   tokio::io::copy(&mut encoder, output).await
 }
 
-pub async fn brotli_stream<R, W>(
+async fn brotli_stream<R, W>(
   input: R,
   output: &mut W,
 ) -> Result<u64, std::io::Error>
@@ -205,7 +205,7 @@ where
   tokio::io::copy(&mut encoder, output).await
 }
 
-pub async fn zstd_stream<R, W>(
+async fn zstd_stream<R, W>(
   input: R,
   output: &mut W,
 ) -> Result<u64, std::io::Error>

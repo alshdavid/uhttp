@@ -16,12 +16,16 @@ async fn main() -> anyhow::Result<()> {
     res.write_head(uhttp::StatusCode::OK).await?;
 
     res.write_all(b"1\n").await?;
+    res.flush().await?;
 
     sleep(Duration::from_millis(1000)).await;
     res.write_all(b"2\n").await?;
+    res.flush().await?;
 
     sleep(Duration::from_millis(1000)).await;
     res.write_all(b"3\n").await?;
+    res.flush().await?;
+
     Ok(())
   })
   .listen("0.0.0.0:8080")

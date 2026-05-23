@@ -1,5 +1,10 @@
+set windows-shell := ["pwsh", "-NoLogo", "-NoProfileLoadTime", "-Command"]
+
 run package="basic":
   cargo run --package uhttp_example_{{package}}
+
+watch package="basic":
+  cargo watch -c -s "cargo run --package uhttp_example_{{package}}"
 
 build:
   cargo build

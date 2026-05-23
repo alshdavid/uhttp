@@ -12,11 +12,13 @@
 
 ```shell
 cargo add uhttp
-cargo add uhttp -F json       # JSON deserializtion
-cargo add uhttp -F router     # Router for URLs
-cargo add uhttp -F http2      # Support for HTTP/2 with SSL
-cargo add uhttp -F websocket  # Support for Websockets
-cargo add uhttp -F anyhow     # Support for error handling with anyhow
+cargo add uhttp -F json                       # JSON deserializtion
+cargo add uhttp -F router                     # Router for URLs
+cargo add uhttp -F http2                      # Support for HTTP/2 with SSL
+cargo add uhttp -F websocket                  # Support for Websockets
+cargo add uhttp -F file_server                # File server that reads from the file system
+cargo add uhttp -F file_server_include_dir    # File server that reads from embedded files
+cargo add uhttp -F anyhow                     # Support for error handling with anyhow
 ```
 
 ## Usage
@@ -61,6 +63,34 @@ async fn main() -> anyhow::Result<()> {
 
     Ok(())
   })
+  .listen("0.0.0.0:8080")
+  .await?;
+
+  Ok(())
+}
+```
+
+### Static File Server
+
+```rust
+use std::path::PathBuf;
+
+use uhttp;
+use uhttp::file_server::EtagStrategy;
+use uhttp::file_server::FileServerOptions;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+  // Change this to the directory where the files live
+  let static_files_dir: PathBuf = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("static");
+
+  uhttp::http1::create_server(uhttp::file_server::create(FileServerOptions {
+    dir:static_files_dir,
+    // JIT Compression
+    compress: true,
+    // ETag to prevent client from making multiple requests
+    etag: ETagStrategy::LastModified,
+  }))
   .listen("0.0.0.0:8080")
   .await?;
 

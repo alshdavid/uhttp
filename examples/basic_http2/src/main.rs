@@ -1,10 +1,10 @@
-use std::path::PathBuf;
-
-use anyhow::Context;
 /*
   Test with:
     curl https://localhost:8080
 */
+use std::path::PathBuf;
+
+use anyhow::Context;
 use uhttp;
 use uhttp::AsyncWriteExt;
 

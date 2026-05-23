@@ -190,57 +190,57 @@ impl Router {
       let fallback = fallback.clone();
 
       Box::pin(async move {
-        let path = req.uri.path().to_string();
-        let routes = match req.method() {
-          &Method::GET => get_routes,
-          &Method::POST => post_routes,
-          &Method::PUT => put_routes,
-          &Method::PATCH => patch_routes,
-          &Method::DELETE => delete_routes,
-          &Method::HEAD => head_routes,
-          &Method::CONNECT => connect_routes,
-          _ => Arc::clone(&any_routes),
-        };
-        if let Some((handler, params)) = routes.find(&path) {
-          let params_map: HashMap<String, String> = params
-            .params()
-            .iter()
-            .map(|(k, v)| {
-              (
-                k.to_string(),
-                percent_decode_str(v).decode_utf8_lossy().to_string(),
-              )
-            })
-            .collect();
-          req.params = params_map;
-          handler(req, res).await?;
-          return Ok(());
-        }
+        // let path = req.uri.path().to_string();
+        // let routes = match req.method() {
+        //   &Method::GET => get_routes,
+        //   &Method::POST => post_routes,
+        //   &Method::PUT => put_routes,
+        //   &Method::PATCH => patch_routes,
+        //   &Method::DELETE => delete_routes,
+        //   &Method::HEAD => head_routes,
+        //   &Method::CONNECT => connect_routes,
+        //   _ => Arc::clone(&any_routes),
+        // };
+        // if let Some((handler, params)) = routes.find(&path) {
+        //   let params_map: HashMap<String, String> = params
+        //     .params()
+        //     .iter()
+        //     .map(|(k, v)| {
+        //       (
+        //         k.to_string(),
+        //         percent_decode_str(v).decode_utf8_lossy().to_string(),
+        //       )
+        //     })
+        //     .collect();
+        //   req.params = params_map;
+        //   handler(req, res).await?;
+        //   return Ok(());
+        // }
 
-        if let Some((handler, params)) = any_routes.find(&path) {
-          let params_map: HashMap<String, String> = params
-            .params()
-            .iter()
-            .map(|(k, v)| {
-              (
-                k.to_string(),
-                percent_decode_str(v).decode_utf8_lossy().to_string(),
-              )
-            })
-            .collect();
+        // if let Some((handler, params)) = any_routes.find(&path) {
+        //   let params_map: HashMap<String, String> = params
+        //     .params()
+        //     .iter()
+        //     .map(|(k, v)| {
+        //       (
+        //         k.to_string(),
+        //         percent_decode_str(v).decode_utf8_lossy().to_string(),
+        //       )
+        //     })
+        //     .collect();
 
-          req.params = params_map;
-          handler(req, res).await?;
-          return Ok(());
-        }
+        //   req.params = params_map;
+        //   handler(req, res).await?;
+        //   return Ok(());
+        // }
 
-        if let Some(handler) = fallback {
-          handler(req, res).await?;
-          return Ok(());
-        }
+        // if let Some(handler) = fallback {
+        //   handler(req, res).await?;
+        //   return Ok(());
+        // }
 
-        res.write_all(b"").await?;
-        res.write_head(crate::StatusCode::NOT_FOUND).await?;
+        // res.write_all(b"").await?;
+        // res.write_head(crate::StatusCode::NOT_FOUND).await?;
         Ok(())
       })
     })

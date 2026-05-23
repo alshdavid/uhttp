@@ -100,51 +100,51 @@ pub fn create_include_dir(options: FileServerIncludeDirOptions) -> HandleFunc {
     let cache = Arc::clone(&cache);
 
     Box::pin(async move {
-      let url_path = determine_file(req.uri().path());
+      // let url_path = determine_file(req.uri().path());
 
-      let Some(file) = cache.get(&url_path) else {
-        res.write_head(StatusCode::NOT_FOUND).await?;
-        return Ok(());
-      };
+      // let Some(file) = cache.get(&url_path) else {
+      //   res.write_head(StatusCode::NOT_FOUND).await?;
+      //   return Ok(());
+      // };
 
-      res.header().add("Content-Type", &file.mime_type).await?;
+      // res.header().add("Content-Type", &file.mime_type).await?;
 
-      if options.compress
-        && let Some(accept_encoding) = get_header(&req, "Accept-Encoding")
-      {
-        if accept_encoding.contains("br") {
-          res.header().add("Content-Encoding", "br").await?;
+      // if options.compress
+      //   && let Some(accept_encoding) = get_header(&req, "Accept-Encoding")
+      // {
+      //   if accept_encoding.contains("br") {
+      //     res.header().add("Content-Encoding", "br").await?;
 
-          if !has_modified(&req, &file.hash) {
-            res.write_head(StatusCode::NOT_MODIFIED).await?;
-            return Ok(());
-          }
-          res.header().add("ETag", &file.hash_br).await?;
-          res.write_all(&file.contents_br).await?;
-          res.write_head(StatusCode::OK).await?;
-          return Ok(());
-        } else if accept_encoding.contains("gz") {
-          res.header().add("Content-Encoding", "gzip").await?;
+      //     if !has_modified(&req, &file.hash) {
+      //       res.write_head(StatusCode::NOT_MODIFIED).await?;
+      //       return Ok(());
+      //     }
+      //     res.header().add("ETag", &file.hash_br).await?;
+      //     res.write_all(&file.contents_br).await?;
+      //     res.write_head(StatusCode::OK).await?;
+      //     return Ok(());
+      //   } else if accept_encoding.contains("gz") {
+      //     res.header().add("Content-Encoding", "gzip").await?;
 
-          if !has_modified(&req, &file.hash) {
-            res.write_head(StatusCode::NOT_MODIFIED).await?;
-            return Ok(());
-          }
-          res.header().add("ETag", &file.hash_gzip).await?;
-          res.write_all(&file.contents_gzip).await?;
-          res.write_head(StatusCode::OK).await?;
-          return Ok(());
-        }
-      }
+      //     if !has_modified(&req, &file.hash) {
+      //       res.write_head(StatusCode::NOT_MODIFIED).await?;
+      //       return Ok(());
+      //     }
+      //     res.header().add("ETag", &file.hash_gzip).await?;
+      //     res.write_all(&file.contents_gzip).await?;
+      //     res.write_head(StatusCode::OK).await?;
+      //     return Ok(());
+      //   }
+      // }
 
-      if !has_modified(&req, &file.hash) {
-        res.write_head(StatusCode::NOT_MODIFIED).await?;
-        return Ok(());
-      }
+      // if !has_modified(&req, &file.hash) {
+      //   res.write_head(StatusCode::NOT_MODIFIED).await?;
+      //   return Ok(());
+      // }
 
-      res.header().add("ETag", &file.hash).await?;
-      res.write_all(&file.contents).await?;
-      res.write_head(StatusCode::OK).await?;
+      // res.header().add("ETag", &file.hash).await?;
+      // res.write_all(&file.contents).await?;
+      // res.write_head(StatusCode::OK).await?;
       return Ok(());
     })
   })

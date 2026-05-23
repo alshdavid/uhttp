@@ -25,6 +25,22 @@ pub struct Request {
   pub(crate) params: HashMap<String, String>,
 }
 
+impl Clone for Request {
+  fn clone(&self) -> Self {
+    Self {
+      inner: Box::new(tokio::io::empty()),
+      headers: self.headers.clone(),
+      method: self.method.clone(),
+      version: self.version.clone(),
+      uri: self.uri.clone(),
+      #[cfg(feature = "websocket")]
+      extensions: self.extensions.clone(),
+      #[cfg(feature = "router")]
+      params: self.params.clone(),
+    }
+  }
+}
+
 impl Request {
   pub fn new(incoming: hyper::Request<hyper::body::Incoming>) -> Self {
     let (parts, body) = incoming.into_parts();

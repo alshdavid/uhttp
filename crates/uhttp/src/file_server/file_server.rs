@@ -41,75 +41,75 @@ pub fn create(options: FileServerOptions) -> HandleFunc {
     let options = Arc::clone(&options);
 
     Box::pin(async move {
-      let url_path = determine_file(req.uri().path());
-      let full_path = options.dir.join(&url_path);
+      // let url_path = determine_file(req.uri().path());
+      // let full_path = options.dir.join(&url_path);
 
-      let Ok(mut file) = tokio::fs::File::open(&full_path).await else {
-        res.write_head(StatusCode::NOT_FOUND).await?;
-        return Ok(());
-      };
+      // let Ok(mut file) = tokio::fs::File::open(&full_path).await else {
+      //   res.write_head(StatusCode::NOT_FOUND).await?;
+      //   return Ok(());
+      // };
 
-      let mime_type = mime_guess::from_path(&full_path)
-        .first_or_octet_stream()
-        .to_string();
+      // let mime_type = mime_guess::from_path(&full_path)
+      //   .first_or_octet_stream()
+      //   .to_string();
 
-      res.header().add("Content-Type", &mime_type).await?;
+      // res.header().add("Content-Type", &mime_type).await?;
 
-      if options.compress
-        && let Some(accept_encoding) = req.headers().get("Accept-Encoding")
-        && let Ok(accept_encoding) = accept_encoding.to_str()
-      {
-        if accept_encoding.contains("zstd") {
-          res.header().add("Content-Encoding", "zstd").await?;
+      // if options.compress
+      //   && let Some(accept_encoding) = req.headers().get("Accept-Encoding")
+      //   && let Ok(accept_encoding) = accept_encoding.to_str()
+      // {
+      //   if accept_encoding.contains("zstd") {
+      //     res.header().add("Content-Encoding", "zstd").await?;
 
-          if let Some(etag) = etag_file(&mut file, &options.etag, "zstd").await? {
-            if !has_modified(&req, &etag) {
-              res.write_head(StatusCode::NOT_MODIFIED).await?;
-              return Ok(());
-            }
-            res.header().add("ETag", &etag).await?;
-          }
-          res.write_head(StatusCode::OK).await?;
-          zstd_stream(&mut file, &mut res).await?;
-          return Ok(());
-        } else if accept_encoding.contains("br") {
-          res.header().add("Content-Encoding", "br").await?;
+      //     if let Some(etag) = etag_file(&mut file, &options.etag, "zstd").await? {
+      //       if !has_modified(&req, &etag) {
+      //         res.write_head(StatusCode::NOT_MODIFIED).await?;
+      //         return Ok(());
+      //       }
+      //       res.header().add("ETag", &etag).await?;
+      //     }
+      //     res.write_head(StatusCode::OK).await?;
+      //     zstd_stream(&mut file, &mut res).await?;
+      //     return Ok(());
+      //   } else if accept_encoding.contains("br") {
+      //     res.header().add("Content-Encoding", "br").await?;
 
-          if let Some(etag) = etag_file(&mut file, &options.etag, "br").await? {
-            if !has_modified(&req, &etag) {
-              res.write_head(StatusCode::NOT_MODIFIED).await?;
-              return Ok(());
-            }
-            res.header().add("ETag", &etag).await?;
-          }
-          res.write_head(StatusCode::OK).await?;
-          brotli_stream(&mut file, &mut res).await?;
-          return Ok(());
-        } else if accept_encoding.contains("gz") {
-          res.header().add("Content-Encoding", "gzip").await?;
-          if let Some(etag) = etag_file(&mut file, &options.etag, "gzip").await? {
-            if !has_modified(&req, &etag) {
-              res.write_head(StatusCode::NOT_MODIFIED).await?;
-              return Ok(());
-            }
-            res.header().add("ETag", &etag).await?;
-          }
-          res.write_head(StatusCode::OK).await?;
-          gzip_stream(&mut file, &mut res).await?;
-          return Ok(());
-        }
-      }
+      //     if let Some(etag) = etag_file(&mut file, &options.etag, "br").await? {
+      //       if !has_modified(&req, &etag) {
+      //         res.write_head(StatusCode::NOT_MODIFIED).await?;
+      //         return Ok(());
+      //       }
+      //       res.header().add("ETag", &etag).await?;
+      //     }
+      //     res.write_head(StatusCode::OK).await?;
+      //     brotli_stream(&mut file, &mut res).await?;
+      //     return Ok(());
+      //   } else if accept_encoding.contains("gz") {
+      //     res.header().add("Content-Encoding", "gzip").await?;
+      //     if let Some(etag) = etag_file(&mut file, &options.etag, "gzip").await? {
+      //       if !has_modified(&req, &etag) {
+      //         res.write_head(StatusCode::NOT_MODIFIED).await?;
+      //         return Ok(());
+      //       }
+      //       res.header().add("ETag", &etag).await?;
+      //     }
+      //     res.write_head(StatusCode::OK).await?;
+      //     gzip_stream(&mut file, &mut res).await?;
+      //     return Ok(());
+      //   }
+      // }
 
-      if let Some(etag) = etag_file(&mut file, &options.etag, "").await? {
-        if !has_modified(&req, &etag) {
-          res.write_head(StatusCode::NOT_MODIFIED).await?;
-          return Ok(());
-        }
-        res.header().add("ETag", &etag).await?;
-      }
+      // if let Some(etag) = etag_file(&mut file, &options.etag, "").await? {
+      //   if !has_modified(&req, &etag) {
+      //     res.write_head(StatusCode::NOT_MODIFIED).await?;
+      //     return Ok(());
+      //   }
+      //   res.header().add("ETag", &etag).await?;
+      // }
 
-      res.write_head(StatusCode::OK).await?;
-      tokio::io::copy(&mut file, &mut res).await?;
+      // res.write_head(StatusCode::OK).await?;
+      // tokio::io::copy(&mut file, &mut res).await?;
       Ok(())
     })
   })

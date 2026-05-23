@@ -1141,6 +1141,7 @@ dependencies = [
  "hyper-util",
  "include_dir",
  "mime_guess",
+ "parking_lot",
  "path-tree",
  "percent-encoding",
  "rustls-pemfile",

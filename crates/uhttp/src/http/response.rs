@@ -6,31 +6,32 @@ use std::task::Context;
 use std::task::Poll;
 
 use futures::TryStreamExt;
+use parking_lot::Mutex;
 use tokio::io::AsyncWrite;
 use tokio::io::AsyncWriteExt;
-use tokio::sync::Mutex;
-use tokio::sync::RwLock;
 
 use super::Headers;
 
+type HyperResponse =
+  http::Response<http_body_util::combinators::BoxBody<hyper::body::Bytes, Infallible>>;
+
 pub(crate) enum ResponseState {
-  Builder(
-    (
-      hyper::http::response::Builder,
-      tokio::sync::oneshot::Sender<
-        http::Response<http_body_util::combinators::BoxBody<hyper::body::Bytes, Infallible>>,
-      >,
-    ),
-  ),
+  Builder {
+    builder: hyper::http::response::Builder,
+    tx_res: tokio::sync::oneshot::Sender<HyperResponse>,
+    buffer: Vec<u8>,
+  },
   Stream(tokio::io::DuplexStream),
   Done,
-  Pending,
+}
+
+pub(crate) struct ResponseInner {
+  state: ResponseState,
 }
 
 #[derive(Clone)]
 pub struct Response {
-  pub(crate) state: Arc<RwLock<ResponseState>>,
-  pub(crate) buffer: Arc<Mutex<Vec<u8>>>,
+  pub(crate) inner: Option<Arc<Mutex<Option<ResponseState>>>>,
 }
 
 impl Response {
@@ -41,100 +42,116 @@ impl Response {
     builder: hyper::http::response::Builder,
   ) -> Self {
     Self {
-      state: Arc::new(RwLock::new(ResponseState::Builder((builder, tx_res)))),
-      buffer: Default::default(),
+      inner: Some(Arc::new(Mutex::new(Some(ResponseState::Builder {
+        builder: builder,
+        tx_res: tx_res,
+        buffer: Default::default(),
+      })))),
     }
   }
 
   pub fn header(&self) -> Headers {
-    Headers::new(Arc::clone(&self.state))
+    // Headers::new(Arc::clone(&self.state))
+    todo!()
   }
 
   /// Send the headers and the body. Headers cannot be sent after this is called
   pub async fn write_head(
-    &self,
+    &mut self,
     status: http::StatusCode,
   ) -> crate::Result<()> {
-    let mut guard = self.state.write().await;
-
-    let (mut builder, tx_res) = match std::mem::replace(&mut *guard, ResponseState::Pending) {
-      ResponseState::Builder(builder) => builder,
-      ResponseState::Stream(_response) => return Err(crate::Error::generic("Already wrote head")),
-      ResponseState::Done => return Err(crate::Error::generic("Response has ended")),
-      ResponseState::Pending => return Err(crate::Error::generic("Currently Writing")),
+    let Some(inner) = &self.inner else {
+      return crate::Error::generic_err("Request Closed");
     };
 
-    builder = builder.status(status);
+    let to_write = {
+      let mut state = inner.lock();
 
-    let (mut writer, reader) = tokio::io::duplex(512);
+      let Some(ResponseState::Builder {
+        mut builder,
+        tx_res,
+        mut buffer,
+      }) = state.take()
+      else {
+        return crate::Error::generic_err("Tried to write head but head was already written");
+      };
 
-    let reader_stream = tokio_util::io::ReaderStream::new(reader)
-      .map_ok(hyper::body::Frame::data)
-      .map_err(|_item| panic!());
+      builder = builder.status(status);
 
-    let stream_body = http_body_util::StreamBody::new(reader_stream);
-    let boxed_body: http_body_util::combinators::BoxBody<hyper::body::Bytes, Infallible> =
-      http_body_util::combinators::BoxBody::<hyper::body::Bytes, Infallible>::new(stream_body);
+      let (writer, reader) = tokio::io::duplex(512);
 
-    let res: http::Response<http_body_util::combinators::BoxBody<hyper::body::Bytes, Infallible>> =
-      builder.body(boxed_body)?;
+      let reader_stream = tokio_util::io::ReaderStream::new(reader)
+        .map_ok(hyper::body::Frame::data)
+        .map_err(|_item| panic!());
 
-    if tx_res.send(res).is_err() {
-      return Err(crate::Error::generic("Failed to send request"));
+      let stream_body = http_body_util::StreamBody::new(reader_stream);
+      let boxed_body: http_body_util::combinators::BoxBody<hyper::body::Bytes, Infallible> =
+        http_body_util::combinators::BoxBody::<hyper::body::Bytes, Infallible>::new(stream_body);
+
+      let res: http::Response<
+        http_body_util::combinators::BoxBody<hyper::body::Bytes, Infallible>,
+      > = builder.body(boxed_body)?;
+
+      if tx_res.send(res).is_err() {
+        return Err(crate::Error::generic("Failed to send request"));
+      };
+
+      state.replace(ResponseState::Stream(writer));
+
+      if !buffer.is_empty() {
+        Some(std::mem::take(&mut buffer))
+      } else {
+        None
+      }
     };
 
-    let mut buffer = self.buffer.lock().await;
-    if !buffer.is_empty() {
-      let b = std::mem::take(&mut (*buffer));
-      writer.write_all(b.as_slice()).await?;
+    if let Some(b) = to_write {
+      self.write_all(b.as_slice()).await?;
     }
-
-    drop(std::mem::replace(
-      &mut *guard,
-      ResponseState::Stream(writer),
-    ));
-
     Ok(())
   }
 
   /// End the http response, nothing can be sent after this is called
   pub async fn end(&self) -> crate::Result<()> {
-    let mut guard = self.state.write().await;
-
-    let inner = std::mem::replace(&mut *guard, ResponseState::Pending);
-    match inner {
-      ResponseState::Builder(_builder) => return Err(crate::Error::generic("Already wrote head")),
-      ResponseState::Stream(_response) => return Err(crate::Error::generic("Already wrote head")),
-      ResponseState::Done => return Err(crate::Error::generic("Response has ended")),
-      ResponseState::Pending => return Err(crate::Error::generic("Currently Writing")),
+    let Some(inner) = &self.inner else {
+      return crate::Error::generic_err("Request Closed");
     };
+
+    let mut state = inner.lock();
+    drop(state.take());
+    Ok(())
   }
 }
 
 impl Drop for Response {
   fn drop(&mut self) {
-    let state = Arc::clone(&self.state);
-    let buffer = Arc::clone(&self.buffer);
+    let Some(inner) = self.inner.take() else {
+      return;
+    };
 
-    tokio::task::spawn(async move {
-      let mut guard = state.write().await;
-      let inner = std::mem::replace(&mut *guard, ResponseState::Pending);
+    let Some(inner) = Arc::into_inner(inner) else {
+      return;
+    };
 
-      match inner {
-        ResponseState::Builder((builder, tx_res)) => {
-          let mut buffer = buffer.lock().await;
-          let bytes = std::mem::take(&mut (*buffer));
-          let b = hyper::body::Bytes::from(bytes);
-          let b2 = http_body_util::Full::new(b);
-          let body = http_body_util::combinators::BoxBody::new(b2);
-          let res = builder.status(200).body(body).unwrap();
-          drop(tx_res.send(res));
-        }
-        ResponseState::Stream(_response) => {}
-        ResponseState::Done => {}
-        ResponseState::Pending => {}
-      };
-    });
+    let mut state = inner.lock();
+
+    let Some(ResponseState::Builder {
+      builder,
+      tx_res,
+      mut buffer,
+    }) = state.take()
+    else {
+      return;
+    };
+
+    println!("Dropping backup");
+
+    let bytes = std::mem::take(&mut buffer);
+    let b = hyper::body::Bytes::from(bytes);
+    let b2 = http_body_util::Full::new(b);
+    let body = http_body_util::combinators::BoxBody::new(b2);
+    let res = builder.status(200).body(body).unwrap();
+    drop(tx_res.send(res));
   }
 }
 
@@ -149,34 +166,35 @@ impl AsyncWrite for Response {
   ) -> Poll<Result<usize, io::Error>> {
     let this = self.get_mut();
 
-    let mut state_guard = match this.state.try_write() {
-      Ok(guard) => guard,
-      Err(_) => {
-        cx.waker().wake_by_ref();
-        return Poll::Pending;
-      }
+    let Some(inner) = &this.inner else {
+      return Poll::Ready(Err(io::Error::new(
+        io::ErrorKind::BrokenPipe,
+        "Response has ended",
+      )));
     };
 
-    match &mut *state_guard {
+    let mut state_guard = inner.lock();
+
+    let Some(inner_guard) = &mut *state_guard else {
+      return Poll::Ready(Err(io::Error::new(
+        io::ErrorKind::BrokenPipe,
+        "Response has ended",
+      )));
+    };
+
+    match &mut *inner_guard {
       ResponseState::Stream(writer) => Pin::new(writer).poll_write(cx, buf),
-      ResponseState::Builder(_) => {
-        let mut buffer_guard = match this.buffer.try_lock() {
-          Ok(guard) => guard,
-          Err(_) => {
-            cx.waker().wake_by_ref();
-            return Poll::Pending;
-          }
-        };
-        buffer_guard.extend_from_slice(buf);
+      ResponseState::Builder {
+        builder: _,
+        tx_res: _,
+        buffer,
+      } => {
+        buffer.extend_from_slice(buf);
         Poll::Ready(Ok(buf.len()))
       }
       ResponseState::Done => Poll::Ready(Err(io::Error::new(
         io::ErrorKind::BrokenPipe,
         "Response has ended",
-      ))),
-      ResponseState::Pending => Poll::Ready(Err(io::Error::new(
-        io::ErrorKind::WouldBlock,
-        "Currently writing",
       ))),
     }
   }
@@ -187,24 +205,32 @@ impl AsyncWrite for Response {
   ) -> Poll<Result<(), io::Error>> {
     let this = self.get_mut();
 
-    let mut state_guard = match this.state.try_write() {
-      Ok(guard) => guard,
-      Err(_) => {
-        cx.waker().wake_by_ref();
-        return Poll::Pending;
-      }
+    let Some(inner) = &this.inner else {
+      return Poll::Ready(Err(io::Error::new(
+        io::ErrorKind::BrokenPipe,
+        "Response has ended",
+      )));
     };
 
-    match &mut *state_guard {
+    let mut state_guard = inner.lock();
+
+    let Some(inner_guard) = &mut *state_guard else {
+      return Poll::Ready(Err(io::Error::new(
+        io::ErrorKind::BrokenPipe,
+        "Response has ended",
+      )));
+    };
+
+    match &mut *inner_guard {
       ResponseState::Stream(writer) => Pin::new(writer).poll_flush(cx),
-      ResponseState::Builder(_) => Poll::Ready(Ok(())),
+      ResponseState::Builder {
+        builder: _,
+        tx_res: _,
+        buffer: _,
+      } => Poll::Ready(Ok(())),
       ResponseState::Done => Poll::Ready(Err(io::Error::new(
         io::ErrorKind::BrokenPipe,
         "Response has ended",
-      ))),
-      ResponseState::Pending => Poll::Ready(Err(io::Error::new(
-        io::ErrorKind::WouldBlock,
-        "Currently writing",
       ))),
     }
   }
@@ -215,40 +241,39 @@ impl AsyncWrite for Response {
   ) -> Poll<Result<(), io::Error>> {
     let this = self.get_mut();
 
-    // Try to lock the state non-blockingly
-    let mut state_guard = match this.state.try_write() {
-      Ok(guard) => guard,
-      Err(_) => {
-        // Lock is held, wake and return pending
-        cx.waker().wake_by_ref();
-        return Poll::Pending;
-      }
+    let Some(inner) = &this.inner else {
+      return Poll::Ready(Err(io::Error::new(
+        io::ErrorKind::BrokenPipe,
+        "Response has ended",
+      )));
     };
 
-    match &mut *state_guard {
-      ResponseState::Stream(writer) => {
-        // Shutdown the underlying stream
-        match Pin::new(writer).poll_shutdown(cx) {
-          Poll::Ready(Ok(())) => {
-            // Transition to Done state
-            *state_guard = ResponseState::Done;
-            Poll::Ready(Ok(()))
-          }
-          Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
-          Poll::Pending => Poll::Pending,
+    let mut state_guard = inner.lock();
+
+    let Some(inner_guard) = &mut *state_guard else {
+      return Poll::Ready(Err(io::Error::new(
+        io::ErrorKind::BrokenPipe,
+        "Response has ended",
+      )));
+    };
+
+    match &mut *inner_guard {
+      ResponseState::Stream(writer) => match Pin::new(writer).poll_shutdown(cx) {
+        Poll::Ready(Ok(())) => {
+          state_guard.replace(ResponseState::Done);
+          Poll::Ready(Ok(()))
         }
-      }
-      ResponseState::Builder(_) => Poll::Ready(Err(io::Error::other(
+        Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
+        Poll::Pending => Poll::Pending,
+      },
+      ResponseState::Builder {
+        builder: _,
+        tx_res: _,
+        buffer: _,
+      } => Poll::Ready(Err(io::Error::other(
         "Cannot shutdown before write_head is called",
       ))),
-      ResponseState::Done => {
-        // Already shut down
-        Poll::Ready(Ok(()))
-      }
-      ResponseState::Pending => Poll::Ready(Err(io::Error::new(
-        io::ErrorKind::WouldBlock,
-        "Currently writing",
-      ))),
+      ResponseState::Done => Poll::Ready(Ok(())),
     }
   }
 }

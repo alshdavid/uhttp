@@ -22,55 +22,64 @@ impl WebSocket {
     mut req: crate::Request,
     res: crate::Response,
   ) -> crate::Result<(WebsocketSender, WebsocketReciever)> {
-    let mut guard = res.state.write().await;
+    // let Some(inner) = &res.inner else {
+    //   return Err(crate::Error::generic("Cannot upgrade"));
+    // };
 
-    let (builder, tx_res) = match std::mem::replace(&mut *guard, ResponseState::Pending) {
-      ResponseState::Builder(builder) => builder,
-      _ => return Err(crate::Error::generic("Cannot upgrade")),
-    };
-    drop(guard);
+    // let mut guard = inner.lock();
 
-    let on_upgrade = req
-      .extensions
-      .remove::<hyper::upgrade::OnUpgrade>()
-      .ok_or_else(|| crate::Error::generic("Not upgradable"))?;
+    // let (builder, tx_res) = match std::mem::replace(&mut *guard, ResponseState::Pending) {
+    //   ResponseState::Builder{ builder, tx_res, buffer: _ } => (builder, tx_res),
+    //   _ => return Err(crate::Error::generic("Cannot upgrade")),
+    // };
+    // drop(guard);
 
-    let key = req
-      .headers()
-      .get("Sec-WebSocket-Key")
-      .unwrap()
-      .to_str()
-      .unwrap();
-    let accept = derive_accept_key(key);
+    // let on_upgrade = req
+    //   .extensions
+    //   .remove::<hyper::upgrade::OnUpgrade>()
+    //   .ok_or_else(|| crate::Error::generic("Not upgradable"))?;
 
-    let http_res = builder
-      .status(101)
-      .header("Upgrade", "websocket")
-      .header("Connection", "upgrade")
-      .header("Sec-WebSocket-Accept", accept)
-      .body(
-        Empty::<Bytes>::new()
-          .map_err(|never| match never {})
-          .boxed(),
-      )
-      .map_err(|e| crate::Error::generic(e.to_string()))?;
+    // let key = req
+    //   .headers()
+    //   .get("Sec-WebSocket-Key")
+    //   .unwrap()
+    //   .to_str()
+    //   .unwrap();
+    // let accept = derive_accept_key(key);
 
-    tx_res
-      .send(http_res)
-      .map_err(|_| crate::Error::generic("Failed to send 101"))?;
+    // let http_res = builder
+    //   .status(101)
+    //   .header("Upgrade", "websocket")
+    //   .header("Connection", "upgrade")
+    //   .header("Sec-WebSocket-Accept", accept)
+    //   .body(
+    //     Empty::<Bytes>::new()
+    //       .map_err(|never| match never {})
+    //       .boxed(),
+    //   )
+    //   .map_err(|e| crate::Error::generic(e.to_string()))?;
 
-    let mut guard = res.state.write().await;
-    drop(std::mem::replace(&mut *guard, ResponseState::Done));
-    drop(guard);
+    // tx_res
+    //   .send(http_res)
+    //   .map_err(|_| crate::Error::generic("Failed to send 101"))?;
 
-    let upgraded = on_upgrade.await.expect("Upgrade failed");
-    let socket = WebSocketStream::from_raw_socket(TokioIo::new(upgraded), Role::Server, None).await;
-    let (socket_send, socket_receive) = socket.split();
+    // let Some(inner) = &res.inner else {
+    //   return Err(crate::Error::generic("Cannot upgrade"));
+    // };
 
-    Ok((
-      WebsocketSender(socket_send),
-      WebsocketReciever(socket_receive),
-    ))
+    // let mut guard = inner.lock();
+    // drop(std::mem::replace(&mut *guard, ResponseState::Done));
+    // drop(guard);
+
+    // let upgraded = on_upgrade.await.expect("Upgrade failed");
+    // let socket = WebSocketStream::from_raw_socket(TokioIo::new(upgraded), Role::Server, None).await;
+    // let (socket_send, socket_receive) = socket.split();
+
+    // Ok((
+    //   WebsocketSender(socket_send),
+    //   WebsocketReciever(socket_receive),
+    // ))
+    todo!()
   }
 }
 

@@ -31,7 +31,7 @@ async fn main() -> anyhow::Result<()> {
   app.get("/api/counter", handlers::api_counter_get);
   app.get("/api/events/counter", handlers::api_events_counter_get);
   app.post("/api/counter/increment", handlers::api_events_counter_increment_post);
-  app.post(   "/api/counter/decrement", handlers::api_events_counter_decrement_post);
+  app.post("/api/counter/decrement", handlers::api_events_counter_decrement_post);
 
   app
     .without_context()

@@ -10,6 +10,8 @@ pub use http::*;
 pub use result::*;
 
 #[cfg(feature = "router")]
+pub mod middleware;
+#[cfg(feature = "router")]
 pub mod router;
 
 #[cfg(feature = "websocket")]

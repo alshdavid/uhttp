@@ -14,7 +14,7 @@ use super::RouteBuilderNc;
 use crate::Request;
 use crate::Response;
 
-pub type RouterHandleFunc<Context> = Arc<
+pub(super) type RouterHandleFuncInner<Context> = Arc<
   dyn 'static
     + Send
     + Sync
@@ -25,7 +25,33 @@ pub type RouterHandleFunc<Context> = Arc<
     ) -> Pin<Box<dyn 'static + Send + Future<Output = crate::Result<()>>>>,
 >;
 
-pub type RouterMiddlewareFunc<Context> = Arc<
+pub(super) type RouterMiddlewareFuncInner<Context> = Arc<
+  dyn 'static
+    + Send
+    + Sync
+    + Fn(
+      Request,
+      Response,
+      Context,
+    ) -> Pin<
+      Box<
+        dyn 'static + Send + Future<Output = crate::Result<Option<(Request, Response, Context)>>>,
+      >,
+    >,
+>;
+
+pub type RouterHandleFunc<Context> = Box<
+  dyn 'static
+    + Send
+    + Sync
+    + Fn(
+      Request,
+      Response,
+      Context,
+    ) -> Pin<Box<dyn 'static + Send + Future<Output = crate::Result<()>>>>,
+>;
+
+pub type RouterMiddlewareFunc<Context> = Box<
   dyn 'static
     + Send
     + Sync
@@ -44,13 +70,15 @@ pub struct Router<T>
 where
   T: Clone + Send + Sync + 'static,
 {
-  middleware: Vec<RouterMiddlewareFunc<T>>,
-  any_routes: Rc<RefCell<PathTree<(Vec<RouterMiddlewareFunc<T>>, RouterHandleFunc<T>)>>>,
-  get_routes: Rc<RefCell<PathTree<(Vec<RouterMiddlewareFunc<T>>, RouterHandleFunc<T>)>>>,
-  post_routes: Rc<RefCell<PathTree<(Vec<RouterMiddlewareFunc<T>>, RouterHandleFunc<T>)>>>,
-  put_routes: Rc<RefCell<PathTree<(Vec<RouterMiddlewareFunc<T>>, RouterHandleFunc<T>)>>>,
-  patch_routes: Rc<RefCell<PathTree<(Vec<RouterMiddlewareFunc<T>>, RouterHandleFunc<T>)>>>,
-  delete_routes: Rc<RefCell<PathTree<(Vec<RouterMiddlewareFunc<T>>, RouterHandleFunc<T>)>>>,
+  middleware: Vec<RouterMiddlewareFuncInner<T>>,
+  any_routes: Rc<RefCell<PathTree<(Vec<RouterMiddlewareFuncInner<T>>, RouterHandleFuncInner<T>)>>>,
+  get_routes: Rc<RefCell<PathTree<(Vec<RouterMiddlewareFuncInner<T>>, RouterHandleFuncInner<T>)>>>,
+  post_routes: Rc<RefCell<PathTree<(Vec<RouterMiddlewareFuncInner<T>>, RouterHandleFuncInner<T>)>>>,
+  put_routes: Rc<RefCell<PathTree<(Vec<RouterMiddlewareFuncInner<T>>, RouterHandleFuncInner<T>)>>>,
+  patch_routes:
+    Rc<RefCell<PathTree<(Vec<RouterMiddlewareFuncInner<T>>, RouterHandleFuncInner<T>)>>>,
+  delete_routes:
+    Rc<RefCell<PathTree<(Vec<RouterMiddlewareFuncInner<T>>, RouterHandleFuncInner<T>)>>>,
   context: T,
 }
 
@@ -94,7 +122,7 @@ impl<T: Clone + Send + Sync + 'static> Router<T> {
     F: 'static + Send + Sync + Fn(Request, Response, T) -> Fut,
     Fut: 'static + Send + Future<Output = crate::Result<Option<(Request, Response, T)>>>,
   {
-    let middleware: RouterMiddlewareFunc<T> =
+    let middleware: RouterMiddlewareFuncInner<T> =
       Arc::new(move |req, res, ctx| Box::pin(middleware(req, res, ctx)));
 
     RouteBuilder {

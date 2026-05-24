@@ -28,6 +28,8 @@ async fn main() -> anyhow::Result<()> {
 
   let mut app = uhttp::router::Router::new(ctx);
 
+  app.with_all(uhttp::middleware::logger_default);
+
   app.get("/api/counter", handlers::api_counter_get);
   app.get("/api/events/counter", handlers::api_events_counter_get);
   app.post("/api/counter/increment", handlers::api_events_counter_increment_post);

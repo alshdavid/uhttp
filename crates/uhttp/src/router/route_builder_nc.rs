@@ -4,8 +4,8 @@ use std::sync::Arc;
 
 use path_tree::PathTree;
 
-use super::RouterHandleFunc;
-use super::RouterMiddlewareFunc;
+use super::RouterHandleFuncInner;
+use super::RouterMiddlewareFuncInner;
 use crate::Request;
 use crate::Response;
 
@@ -13,15 +13,18 @@ pub struct RouteBuilderNc<T>
 where
   T: Clone + Send + Sync + 'static,
 {
-  pub(super) any_routes: Rc<RefCell<PathTree<(Vec<RouterMiddlewareFunc<T>>, RouterHandleFunc<T>)>>>,
-  pub(super) get_routes: Rc<RefCell<PathTree<(Vec<RouterMiddlewareFunc<T>>, RouterHandleFunc<T>)>>>,
+  pub(super) any_routes:
+    Rc<RefCell<PathTree<(Vec<RouterMiddlewareFuncInner<T>>, RouterHandleFuncInner<T>)>>>,
+  pub(super) get_routes:
+    Rc<RefCell<PathTree<(Vec<RouterMiddlewareFuncInner<T>>, RouterHandleFuncInner<T>)>>>,
   pub(super) post_routes:
-    Rc<RefCell<PathTree<(Vec<RouterMiddlewareFunc<T>>, RouterHandleFunc<T>)>>>,
-  pub(super) put_routes: Rc<RefCell<PathTree<(Vec<RouterMiddlewareFunc<T>>, RouterHandleFunc<T>)>>>,
+    Rc<RefCell<PathTree<(Vec<RouterMiddlewareFuncInner<T>>, RouterHandleFuncInner<T>)>>>,
+  pub(super) put_routes:
+    Rc<RefCell<PathTree<(Vec<RouterMiddlewareFuncInner<T>>, RouterHandleFuncInner<T>)>>>,
   pub(super) patch_routes:
-    Rc<RefCell<PathTree<(Vec<RouterMiddlewareFunc<T>>, RouterHandleFunc<T>)>>>,
+    Rc<RefCell<PathTree<(Vec<RouterMiddlewareFuncInner<T>>, RouterHandleFuncInner<T>)>>>,
   pub(super) delete_routes:
-    Rc<RefCell<PathTree<(Vec<RouterMiddlewareFunc<T>>, RouterHandleFunc<T>)>>>,
+    Rc<RefCell<PathTree<(Vec<RouterMiddlewareFuncInner<T>>, RouterHandleFuncInner<T>)>>>,
 }
 
 impl<T: Clone + Send + Sync + 'static> RouteBuilderNc<T> {

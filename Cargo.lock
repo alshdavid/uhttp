@@ -1127,7 +1127,7 @@ checksum = "40ce102ab67701b8526c123c1bab5cbe42d7040ccfd0f64af1a385808d2f43de"
 
 [[package]]
 name = "uhttp"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -1217,6 +1217,7 @@ name = "uhttp_example_counter_app"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "serde",
  "serde_json",
  "tokio",
  "uhttp",

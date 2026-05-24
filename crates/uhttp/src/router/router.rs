@@ -242,16 +242,6 @@ impl<T: Clone + Send + Sync + 'static> Router<T> {
       let mut context = context.clone();
 
       Box::pin(async move {
-        let path = req.uri.path().to_string();
-        let routes = match req.method() {
-          &Method::GET => get_routes,
-          &Method::POST => post_routes,
-          &Method::PUT => put_routes,
-          &Method::PATCH => patch_routes,
-          &Method::DELETE => delete_routes,
-          _ => Arc::clone(&any_routes),
-        };
-
         for middleware in &*middleware {
           let Some((new_req, new_res, new_context)) = middleware(req, res, context).await? else {
             return Ok(());
@@ -261,32 +251,57 @@ impl<T: Clone + Send + Sync + 'static> Router<T> {
           context = new_context;
         }
 
-        if let Some(((middleware, handler), params)) = routes.find(&path) {
-          for middleware in middleware {
-            let Some((new_req, new_res, new_context)) = middleware(req, res, context).await? else {
-              return Ok(());
-            };
-            req = new_req;
-            res = new_res;
-            context = new_context;
-          }
+        let path = req.uri.path().to_string();
+        let route = any_routes.find(&path);
 
-          let params_map: HashMap<String, String> = params
-            .params()
-            .iter()
-            .map(|(k, v)| {
-              (
-                k.to_string(),
-                percent_decode_str(v).decode_utf8_lossy().to_string(),
-              )
-            })
-            .collect();
-          req.params = params_map;
-          handler(req, res, context).await?;
-          return Ok(());
+        if route.is_none() {
+          let routes = match req.method() {
+            &Method::GET => get_routes,
+            &Method::POST => post_routes,
+            &Method::PUT => put_routes,
+            &Method::PATCH => patch_routes,
+            &Method::DELETE => delete_routes,
+            _ => Arc::clone(&any_routes),
+          };
+
+          let route = routes.find(&path);
+          if let Some(((middleware, handler), params)) = route {
+            for middleware in middleware {
+              let Some((new_req, new_res, new_context)) = middleware(req, res, context).await?
+              else {
+                return Ok(());
+              };
+              req = new_req;
+              res = new_res;
+              context = new_context;
+            }
+
+            let params_map: HashMap<String, String> = params
+              .params()
+              .iter()
+              .map(|(k, v)| {
+                (
+                  k.to_string(),
+                  percent_decode_str(v).decode_utf8_lossy().to_string(),
+                )
+              })
+              .collect();
+            req.params = params_map;
+            handler(req, res, context).await?;
+            return Ok(());
+          }
         }
 
-        if let Some(((middleware, handler), params)) = any_routes.find(&path) {
+        if let Some(((middleware, handler), params)) = route {
+          for middleware in middleware {
+            let Some((new_req, new_res, new_context)) = middleware(req, res, context).await? else {
+              return Ok(());
+            };
+            req = new_req;
+            res = new_res;
+            context = new_context;
+          }
+
           let params_map: HashMap<String, String> = params
             .params()
             .iter()
@@ -297,18 +312,7 @@ impl<T: Clone + Send + Sync + 'static> Router<T> {
               )
             })
             .collect();
-
           req.params = params_map;
-
-          for middleware in middleware {
-            let Some((new_req, new_res, new_context)) = middleware(req, res, context).await? else {
-              return Ok(());
-            };
-            req = new_req;
-            res = new_res;
-            context = new_context;
-          }
-
           handler(req, res, context).await?;
           return Ok(());
         }

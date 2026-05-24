@@ -29,7 +29,6 @@ async fn main() -> anyhow::Result<()> {
     chat_service: Arc::new(Mutex::new(ChatService::new())),
   });
 
-  // Event Source that emits when the value is updated
   app.any(
     "/api/ws",
     move |req, res, Context { chat_service }: Context| async move {

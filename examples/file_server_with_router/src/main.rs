@@ -16,15 +16,15 @@ async fn main() -> anyhow::Result<()> {
   // Change this to the directory where the files live
   let static_files_dir: PathBuf = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("static");
 
-  let mut app = uhttp::router::Router::new();
+  let mut app = uhttp::router::Router::new_without_context();
 
-  app.get("/api", |_req, mut res| async move {
+  app.get("/api", |_req, mut res, _ctx| async move {
     res.write_all(b"Hello From API").await?;
     res.write_head(StatusCode::OK).await?;
     Ok(())
   });
 
-  app.get(
+  app.without_context().get(
     "/*",
     uhttp::file_server::create(FileServerOptions {
       dir: static_files_dir,

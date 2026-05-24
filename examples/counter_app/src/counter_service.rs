@@ -6,12 +6,12 @@ use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::mpsc::unbounded_channel;
 
-pub struct CoutnerService {
+pub struct CounterService {
   value: AtomicIsize,
   subscriptions: Mutex<Vec<UnboundedSender<()>>>,
 }
 
-impl CoutnerService {
+impl CounterService {
   pub fn new() -> Self {
     Self {
       value: AtomicIsize::new(0),

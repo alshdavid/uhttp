@@ -19,31 +19,27 @@ use crate::services::counter_service::CounterService;
 
 static CARGO_MANIFEST_DIR: &str = env!("CARGO_MANIFEST_DIR");
 
+#[rustfmt::skip]
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-  let mut app = uhttp::router::Router::new(Context {
+  let ctx = Context {
     counter_service: Arc::new(CounterService::new()),
-  });
+  };
+
+  let mut app = uhttp::router::Router::new(ctx);
 
   app.get("/api/counter", handlers::api_counter_get);
   app.get("/api/events/counter", handlers::api_events_counter_get);
-  app.post(
-    "/api/counter/increment",
-    handlers::api_events_counter_increment_post,
-  );
-  app.post(
-    "/api/counter/decrement",
-    handlers::api_events_counter_decrement_post,
-  );
+  app.post("/api/counter/increment", handlers::api_events_counter_increment_post);
+  app.post(   "/api/counter/decrement", handlers::api_events_counter_decrement_post);
 
-  app.without_context().get(
-    "/*",
-    file_server::create(FileServerOptions {
+  app
+    .without_context()
+    .get("/*", file_server::create(FileServerOptions {
       dir: PathBuf::from(CARGO_MANIFEST_DIR).join("static"),
       compress: false,
       etag: ETagStrategy::LastModified,
-    }),
-  );
+    }));
 
   uhttp::http1::create_server(app.handler())
     .listen("0.0.0.0:8080")

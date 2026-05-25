@@ -20,8 +20,7 @@ pub async fn api_counter_get(
     value: counter_value,
   })?;
 
-  let msg = serde_json::to_string_pretty(&json)
-    .map_err(|_| uhttp::Error::generic("Unable to serialize message"))?;
+  let msg = serde_json::to_string_pretty(&json)?;
 
   res.write_all(msg.as_bytes()).await?;
 

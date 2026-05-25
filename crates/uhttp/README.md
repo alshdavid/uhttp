@@ -31,7 +31,6 @@ use uhttp::*;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-
   uhttp::http1::create_server(|req, mut res| async move {
     res.header().add("Content-Type", "text/html").await?;
     res.write_all(b"<body>hello world</body>").await?;
@@ -131,7 +130,7 @@ async fn main() -> anyhow::Result<()> {
 }
 ```
 
-### Router / router
+### Router
 
 ```rust
 use uhttp::*;
@@ -174,6 +173,50 @@ async fn main() -> anyhow::Result<()> {
     .await?;
 
   Ok(())
+}
+```
+
+## Route Context
+
+Route Context is cloned at the start of each request and is used to inject values into request handlers and build context for handlers from middleware.
+
+Examples;
+
+- Inject services that expose database interactions into handlers
+- Add validate a JWT and inject access_token information into handlers
+- Add logging
+
+```rust
+#[derive(Clone)]
+struct Context {
+  random_string: String,
+  reference_string: Arc<String>
+}
+
+/// Mutate Context to inject a random string
+async fn my_middleware(req: uhttp::Request, res: uhttp::Response, mut ctx: Context) {
+  ctx.random_string = generate_random_string();
+  return Ok(Some(req, res, ctx)) // Next middleware
+}
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+  let ctx = Context {
+    random_string: String::default(),
+    reference_string: Arc::new(String::from("Reference to a string"))
+  };
+
+  let mut app = uhttp::router::Router::new(ctx);
+
+  app.with_all(my_middleware);
+
+  app.get("/", |req, mut res, ctx| async move {
+    println!("{}", ctx.reference_string); // Prints "Reference to a string"
+    println!("{}", ctx.random_string);    // "<random_string>" each request will get a new random string
+    Ok(())
+  });
+
+  // server.listen
 }
 ```
 

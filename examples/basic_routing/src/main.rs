@@ -38,7 +38,7 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
   });
 
-  app.get("/*", |_req, mut res, _ctx| async move {
+  app.any("/*", |_req, mut res, _ctx| async move {
     res.write(b"Not found route").await?;
     Ok(())
   });

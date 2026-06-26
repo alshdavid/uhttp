@@ -1,12 +1,21 @@
 [package]
 name = "uhttp"
-version = "0.17.0"
+version = "0.18.0"
 edition = "2024"
 description = "Simple http server for humans"
 license = "MIT"
 repository = "https://github.com/alshdavid/uhttp"
 
 [features]
+full = [
+  "json",
+  "query",
+  "router",
+  "http2",
+  "websocket",
+  "file_server",
+  "file_server_include_dir",
+]
 anyhow = ["dep:anyhow"]
 json = ["dep:serde", "dep:serde_json"]
 query = ["dep:serde", "dep:serde_urlencoded"]

@@ -18,6 +18,8 @@ async fn main() -> anyhow::Result<()> {
     dir: static_files_dir,
     compress: true,
     etag: ETagStrategy::LastModified,
+    fallback_route: Default::default(),
+    fallback_status: Default::default(),
   }))
   .listen("0.0.0.0:8080")
   .await?;

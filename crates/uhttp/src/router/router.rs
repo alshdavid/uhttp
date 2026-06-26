@@ -1,5 +1,4 @@
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::pin::Pin;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -66,19 +65,19 @@ pub type RouterMiddlewareFunc<Context> = Box<
     >,
 >;
 
+type PathTreeRoute<T> = (Vec<RouterMiddlewareFuncInner<T>>, RouterHandleFuncInner<T>);
+
 pub struct Router<T>
 where
   T: Clone + Send + Sync + 'static,
 {
   middleware: Vec<RouterMiddlewareFuncInner<T>>,
-  any_routes: Rc<RefCell<PathTree<(Vec<RouterMiddlewareFuncInner<T>>, RouterHandleFuncInner<T>)>>>,
-  get_routes: Rc<RefCell<PathTree<(Vec<RouterMiddlewareFuncInner<T>>, RouterHandleFuncInner<T>)>>>,
-  post_routes: Rc<RefCell<PathTree<(Vec<RouterMiddlewareFuncInner<T>>, RouterHandleFuncInner<T>)>>>,
-  put_routes: Rc<RefCell<PathTree<(Vec<RouterMiddlewareFuncInner<T>>, RouterHandleFuncInner<T>)>>>,
-  patch_routes:
-    Rc<RefCell<PathTree<(Vec<RouterMiddlewareFuncInner<T>>, RouterHandleFuncInner<T>)>>>,
-  delete_routes:
-    Rc<RefCell<PathTree<(Vec<RouterMiddlewareFuncInner<T>>, RouterHandleFuncInner<T>)>>>,
+  any_routes: Rc<RefCell<PathTree<PathTreeRoute<T>>>>,
+  get_routes: Rc<RefCell<PathTree<PathTreeRoute<T>>>>,
+  post_routes: Rc<RefCell<PathTree<PathTreeRoute<T>>>>,
+  put_routes: Rc<RefCell<PathTree<PathTreeRoute<T>>>>,
+  patch_routes: Rc<RefCell<PathTree<PathTreeRoute<T>>>>,
+  delete_routes: Rc<RefCell<PathTree<PathTreeRoute<T>>>>,
   context: T,
 }
 
@@ -240,13 +239,38 @@ impl<T: Clone + Send + Sync + 'static> Router<T> {
     F: 'static + Send + Sync + Fn(Request, Response, T) -> Fut,
     Fut: 'static + Send + Future<Output = crate::Result<()>>,
   {
-    let _ = self.any_routes.borrow_mut().insert(
-      route,
-      (
-        Vec::new(),
-        Arc::new(move |req, res, ctx| Box::pin(handler(req, res, ctx))),
-      ),
-    );
+    let handler: RouterHandleFuncInner<T> =
+      Arc::new(move |req, res, ctx| Box::pin(handler(req, res, ctx)));
+
+    let _ = self
+      .get_routes
+      .borrow_mut()
+      .insert(route, (Vec::new(), Arc::clone(&handler)));
+
+    let _ = self
+      .post_routes
+      .borrow_mut()
+      .insert(route, (Vec::new(), Arc::clone(&handler)));
+
+    let _ = self
+      .put_routes
+      .borrow_mut()
+      .insert(route, (Vec::new(), Arc::clone(&handler)));
+
+    let _ = self
+      .patch_routes
+      .borrow_mut()
+      .insert(route, (Vec::new(), Arc::clone(&handler)));
+
+    let _ = self
+      .delete_routes
+      .borrow_mut()
+      .insert(route, (Vec::new(), Arc::clone(&handler)));
+
+    let _ = self
+      .any_routes
+      .borrow_mut()
+      .insert(route, (Vec::new(), handler));
   }
 
   pub fn handler(&self) -> crate::HandleFunc {
@@ -280,74 +304,40 @@ impl<T: Clone + Send + Sync + 'static> Router<T> {
         }
 
         let path = req.uri.path().to_string();
-        let route = any_routes.find(&path);
 
-        if route.is_none() {
-          let routes = match req.method() {
-            &Method::GET => get_routes,
-            &Method::POST => post_routes,
-            &Method::PUT => put_routes,
-            &Method::PATCH => patch_routes,
-            &Method::DELETE => delete_routes,
-            _ => Arc::clone(&any_routes),
-          };
+        let routes = match req.method() {
+          &Method::GET => get_routes,
+          &Method::POST => post_routes,
+          &Method::PUT => put_routes,
+          &Method::PATCH => patch_routes,
+          &Method::DELETE => delete_routes,
+          _ => Arc::clone(&any_routes),
+        };
 
-          let route = routes.find(&path);
-          if let Some(((middleware, handler), params)) = route {
-            for middleware in middleware {
-              let Some((new_req, new_res, new_context)) = middleware(req, res, context).await?
-              else {
-                return Ok(());
-              };
-              req = new_req;
-              res = new_res;
-              context = new_context;
-            }
-
-            let params_map: HashMap<String, String> = params
-              .params()
-              .iter()
-              .map(|(k, v)| {
-                (
-                  k.to_string(),
-                  percent_decode_str(v).decode_utf8_lossy().to_string(),
-                )
-              })
-              .collect();
-            req.params = params_map;
-            handler(req, res, context).await?;
-            return Ok(());
-          }
-        }
-
-        if let Some(((middleware, handler), params)) = route {
-          for middleware in middleware {
-            let Some((new_req, new_res, new_context)) = middleware(req, res, context).await? else {
-              return Ok(());
-            };
-            req = new_req;
-            res = new_res;
-            context = new_context;
-          }
-
-          let params_map: HashMap<String, String> = params
-            .params()
-            .iter()
-            .map(|(k, v)| {
-              (
-                k.to_string(),
-                percent_decode_str(v).decode_utf8_lossy().to_string(),
-              )
-            })
-            .collect();
-          req.params = params_map;
-          handler(req, res, context).await?;
+        let Some(((middleware, handler), params)) = routes.find(&path) else {
+          res.write_all(b"").await?;
+          res.write_head(crate::StatusCode::NOT_FOUND).await?;
           return Ok(());
+        };
+
+        for middleware in middleware {
+          let Some((new_req, new_res, new_context)) = middleware(req, res, context).await? else {
+            return Ok(());
+          };
+          req = new_req;
+          res = new_res;
+          context = new_context;
         }
 
-        res.write_all(b"").await?;
-        res.write_head(crate::StatusCode::NOT_FOUND).await?;
-        Ok(())
+        for (key, value) in params.params() {
+          req.params.insert(
+            key.to_string(),
+            percent_decode_str(value).decode_utf8_lossy().to_string(),
+          );
+        }
+
+        handler(req, res, context).await?;
+        return Ok(());
       })
     })
   }

@@ -31,6 +31,10 @@ pub struct FileServerOptions {
   pub compress: bool,
   /// How to supply etag
   pub etag: ETagStrategy,
+  /// Relative path to fallback URL. Defaults to "404.html"
+  pub fallback_route: Option<String>,
+  /// Defaults to [`crate::StatusCode::NOT_FOUND] (404)
+  pub fallback_status: Option<StatusCode>,
 }
 
 /// Serve files from the filesystem
@@ -42,11 +46,28 @@ pub fn create(options: FileServerOptions) -> HandleFunc {
 
     Box::pin(async move {
       let url_path = determine_file(req.uri().path());
-      let full_path = options.dir.join(&url_path);
+      let mut full_path = options.dir.join(&url_path);
+      let mut fallback_status = None::<StatusCode>;
 
-      let Ok(mut file) = tokio::fs::File::open(&full_path).await else {
-        res.write_head(StatusCode::NOT_FOUND).await?;
-        return Ok(());
+      let mut file = match tokio::fs::File::open(&full_path).await {
+        Ok(file) => file,
+        Err(_) => {
+          let fallback_path = match options.fallback_route.as_ref() {
+            Some(path) => options.dir.join(path),
+            None => options.dir.join("404.html"),
+          };
+          fallback_status = Some(options.fallback_status.unwrap_or(StatusCode::NOT_FOUND));
+          match tokio::fs::File::open(&fallback_path).await {
+            Ok(file) => {
+              full_path = fallback_path;
+              file
+            }
+            Err(_) => {
+              res.write_head(StatusCode::NOT_FOUND).await?;
+              return Ok(());
+            }
+          }
+        }
       };
 
       let mime_type = mime_guess::from_path(&full_path)
@@ -69,7 +90,10 @@ pub fn create(options: FileServerOptions) -> HandleFunc {
             }
             res.header().add("ETag", &etag).await?;
           }
-          res.write_head(StatusCode::OK).await?;
+          match fallback_status {
+            Some(status) => res.write_head(status).await?,
+            None => res.write_head(StatusCode::OK).await?,
+          };
           zstd_stream(&mut file, &mut res).await?;
           return Ok(());
         } else if accept_encoding.contains("br") {
@@ -82,7 +106,10 @@ pub fn create(options: FileServerOptions) -> HandleFunc {
             }
             res.header().add("ETag", &etag).await?;
           }
-          res.write_head(StatusCode::OK).await?;
+          match fallback_status {
+            Some(status) => res.write_head(status).await?,
+            None => res.write_head(StatusCode::OK).await?,
+          };
           brotli_stream(&mut file, &mut res).await?;
           return Ok(());
         } else if accept_encoding.contains("gz") {
@@ -94,7 +121,10 @@ pub fn create(options: FileServerOptions) -> HandleFunc {
             }
             res.header().add("ETag", &etag).await?;
           }
-          res.write_head(StatusCode::OK).await?;
+          match fallback_status {
+            Some(status) => res.write_head(status).await?,
+            None => res.write_head(StatusCode::OK).await?,
+          };
           gzip_stream(&mut file, &mut res).await?;
           return Ok(());
         }
@@ -108,7 +138,10 @@ pub fn create(options: FileServerOptions) -> HandleFunc {
         res.header().add("ETag", &etag).await?;
       }
 
-      res.write_head(StatusCode::OK).await?;
+      match fallback_status {
+        Some(status) => res.write_head(status).await?,
+        None => res.write_head(StatusCode::OK).await?,
+      };
       tokio::io::copy(&mut file, &mut res).await?;
       Ok(())
     })

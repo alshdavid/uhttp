@@ -41,6 +41,8 @@ async fn main() -> anyhow::Result<()> {
       dir: PathBuf::from(CARGO_MANIFEST_DIR).join("static"),
       compress: false,
       etag: ETagStrategy::LastModified,
+      fallback_route: Default::default(),
+      fallback_status: Default::default(),
     }));
 
   uhttp::http1::create_server(app.handler())

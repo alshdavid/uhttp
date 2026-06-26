@@ -30,6 +30,7 @@ async fn main() -> anyhow::Result<()> {
       dir: static_files_dir,
       compress: true,
       etag: ETagStrategy::LastModified,
+      custom_headers: Default::default(),
       fallback_route: Default::default(),
       fallback_status: Default::default(),
     }),

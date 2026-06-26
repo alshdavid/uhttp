@@ -6,6 +6,7 @@
 use std::path::PathBuf;
 
 use uhttp;
+use uhttp::StatusCode;
 use uhttp::file_server::ETagStrategy;
 use uhttp::file_server::FileServerOptions;
 
@@ -19,8 +20,8 @@ async fn main() -> anyhow::Result<()> {
     compress: true,
     etag: ETagStrategy::LastModified,
     custom_headers: Default::default(),
-    fallback_route: Default::default(),
-    fallback_status: Default::default(),
+    fallback_route: Some("index.html".to_string()),
+    fallback_status: Some(StatusCode::OK),
   }))
   .listen("0.0.0.0:8080")
   .await?;

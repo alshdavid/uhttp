@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -31,6 +33,8 @@ pub struct FileServerOptions {
   pub compress: bool,
   /// How to supply etag
   pub etag: ETagStrategy,
+  /// Add Custom Headers
+  pub custom_headers: HashMap<String, String>,
   /// Relative path to fallback URL. Defaults to "404.html"
   pub fallback_route: Option<String>,
   /// Defaults to [`crate::StatusCode::NOT_FOUND] (404)
@@ -40,37 +44,45 @@ pub struct FileServerOptions {
 /// Serve files from the filesystem
 pub fn create(options: FileServerOptions) -> HandleFunc {
   let options = Arc::new(options);
+  let fallback_path = Arc::new(match options.fallback_route.as_ref() {
+    Some(path) => options.dir.join(path),
+    None => options.dir.join("404.html"),
+  });
+  let fallback_status = Arc::new(match options.fallback_status.as_ref() {
+    Some(status) => *status,
+    None => StatusCode::NOT_FOUND,
+  });
 
   Box::new(move |req, mut res| {
     let options = Arc::clone(&options);
+    let fallback_path = Arc::clone(&fallback_path);
+    let fallback_status = Arc::clone(&fallback_status);
 
     Box::pin(async move {
       let url_path = determine_file(req.uri().path());
-      let mut full_path = options.dir.join(&url_path);
-      let mut fallback_status = None::<StatusCode>;
+      let mut extension = try_extension(&url_path)?;
+      let mut fallback_with_status = None::<Arc<StatusCode>>;
 
-      let mut file = match tokio::fs::File::open(&full_path).await {
+      for (key, value) in &options.custom_headers {
+        res.header().set(key, value).await?;
+      }
+
+      let mut file = match tokio::fs::File::open(&options.dir.join(&url_path)).await {
         Ok(file) => file,
-        Err(_) => {
-          let fallback_path = match options.fallback_route.as_ref() {
-            Some(path) => options.dir.join(path),
-            None => options.dir.join("404.html"),
-          };
-          fallback_status = Some(options.fallback_status.unwrap_or(StatusCode::NOT_FOUND));
-          match tokio::fs::File::open(&fallback_path).await {
-            Ok(file) => {
-              full_path = fallback_path;
-              file
-            }
-            Err(_) => {
-              res.write_head(StatusCode::NOT_FOUND).await?;
-              return Ok(());
-            }
+        Err(_) => match tokio::fs::File::open(&*fallback_path).await {
+          Ok(file) => {
+            fallback_with_status = Some(fallback_status);
+            extension = try_extension(&fallback_path)?;
+            file
           }
-        }
+          Err(_) => {
+            res.write_head(StatusCode::NOT_FOUND).await?;
+            return Ok(());
+          }
+        },
       };
 
-      let mime_type = mime_guess::from_path(&full_path)
+      let mime_type = mime_guess::from_ext(&extension)
         .first_or_octet_stream()
         .to_string();
 
@@ -90,8 +102,8 @@ pub fn create(options: FileServerOptions) -> HandleFunc {
             }
             res.header().add("ETag", &etag).await?;
           }
-          match fallback_status {
-            Some(status) => res.write_head(status).await?,
+          match fallback_with_status {
+            Some(status) => res.write_head(*status).await?,
             None => res.write_head(StatusCode::OK).await?,
           };
           zstd_stream(&mut file, &mut res).await?;
@@ -106,8 +118,8 @@ pub fn create(options: FileServerOptions) -> HandleFunc {
             }
             res.header().add("ETag", &etag).await?;
           }
-          match fallback_status {
-            Some(status) => res.write_head(status).await?,
+          match fallback_with_status {
+            Some(status) => res.write_head(*status).await?,
             None => res.write_head(StatusCode::OK).await?,
           };
           brotli_stream(&mut file, &mut res).await?;
@@ -121,8 +133,8 @@ pub fn create(options: FileServerOptions) -> HandleFunc {
             }
             res.header().add("ETag", &etag).await?;
           }
-          match fallback_status {
-            Some(status) => res.write_head(status).await?,
+          match fallback_with_status {
+            Some(status) => res.write_head(*status).await?,
             None => res.write_head(StatusCode::OK).await?,
           };
           gzip_stream(&mut file, &mut res).await?;
@@ -138,8 +150,8 @@ pub fn create(options: FileServerOptions) -> HandleFunc {
         res.header().add("ETag", &etag).await?;
       }
 
-      match fallback_status {
-        Some(status) => res.write_head(status).await?,
+      match fallback_with_status {
+        Some(status) => res.write_head(*status).await?,
         None => res.write_head(StatusCode::OK).await?,
       };
       tokio::io::copy(&mut file, &mut res).await?;
@@ -249,4 +261,16 @@ where
   use async_compression::tokio::bufread::ZstdEncoder;
   let mut encoder = ZstdEncoder::new(BufReader::new(input));
   tokio::io::copy(&mut encoder, output).await
+}
+
+fn try_extension<'a>(input: &'a Path) -> crate::Result<&'a str> {
+  let Some(ext) = input.extension() else {
+    return Ok(Default::default());
+  };
+
+  let Some(ext) = ext.to_str() else {
+    return Ok(Default::default());
+  };
+
+  Ok(ext)
 }

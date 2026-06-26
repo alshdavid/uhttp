@@ -1253,6 +1253,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "uhttp_example_file_server_spa"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "tokio",
+ "uhttp",
+]
+
+[[package]]
 name = "uhttp_example_file_server_with_router"
 version = "0.1.0"
 dependencies = [

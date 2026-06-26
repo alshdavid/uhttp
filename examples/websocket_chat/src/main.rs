@@ -94,6 +94,7 @@ async fn main() -> anyhow::Result<()> {
       dir: PathBuf::from(CARGO_MANIFEST_DIR).join("static"),
       compress: false,
       etag: ETagStrategy::LastModified,
+      custom_headers: Default::default(),
       fallback_route: Default::default(),
       fallback_status: Default::default(),
     }),

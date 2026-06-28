@@ -65,7 +65,7 @@ pub type RouterMiddlewareFunc<Context> = Box<
     >,
 >;
 
-type PathTreeRoute<T> = (Vec<RouterMiddlewareFuncInner<T>>, RouterHandleFuncInner<T>);
+pub(super) type PathTreeRoute<T> = (Vec<RouterMiddlewareFuncInner<T>>, RouterHandleFuncInner<T>);
 
 pub struct Router<T>
 where

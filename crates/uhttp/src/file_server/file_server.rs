@@ -82,7 +82,7 @@ pub fn create(options: FileServerOptions) -> HandleFunc {
         },
       };
 
-      let mime_type = mime_guess::from_ext(&extension)
+      let mime_type = mime_guess::from_ext(extension)
         .first_or_octet_stream()
         .to_string();
 
@@ -263,7 +263,7 @@ where
   tokio::io::copy(&mut encoder, output).await
 }
 
-fn try_extension<'a>(input: &'a Path) -> crate::Result<&'a str> {
+fn try_extension(input: &Path) -> crate::Result<&str> {
   let Some(ext) = input.extension() else {
     return Ok(Default::default());
   };

@@ -88,16 +88,16 @@ async fn main() -> anyhow::Result<()> {
   );
 
   // Serve static files from the "static" directory, and return 404 for missing files
-  app.without_context().get(
+  app.get(
     "/*",
-    file_server::create(FileServerOptions {
+    uhttp::router::without_context(file_server::create(FileServerOptions {
       dir: PathBuf::from(CARGO_MANIFEST_DIR).join("static"),
       compress: false,
       etag: ETagStrategy::LastModified,
       custom_headers: Default::default(),
       fallback_route: Default::default(),
       fallback_status: Default::default(),
-    }),
+    })),
   );
 
   uhttp::http1::create_server(app.handler())

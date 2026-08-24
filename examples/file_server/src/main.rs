@@ -5,7 +5,6 @@
 
 use std::path::PathBuf;
 
-use uhttp;
 use uhttp::file_server::ETagStrategy;
 use uhttp::file_server::FileServerOptions;
 

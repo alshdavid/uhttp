@@ -145,7 +145,7 @@ pub fn create_include_dir(options: FileServerIncludeDirOptions) -> HandleFunc {
       res.header().add("ETag", &file.hash).await?;
       res.write_all(&file.contents).await?;
       res.write_head(StatusCode::OK).await?;
-      return Ok(());
+      Ok(())
     })
   })
 }
@@ -154,9 +154,7 @@ fn get_header<'a>(
   req: &'a Request,
   name: &str,
 ) -> Option<&'a str> {
-  let Some(header) = req.headers().get(name) else {
-    return None;
-  };
+  let header = req.headers().get(name)?;
 
   let Ok(header) = header.to_str() else {
     return None;

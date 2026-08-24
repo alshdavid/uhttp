@@ -22,22 +22,22 @@ impl CounterService {
   pub async fn subsribe(&self) -> UnboundedReceiver<()> {
     let (tx, rx) = unbounded_channel::<()>();
     self.subscriptions.lock().await.push(tx);
-    return rx;
+    rx
   }
 
   pub fn get(&self) -> isize {
-    return self.value.load(Ordering::Relaxed);
+    self.value.load(Ordering::Relaxed)
   }
 
   pub async fn increment(&self) {
     self.value.fetch_add(1, Ordering::Relaxed);
     let mut senders = self.subscriptions.lock().await;
-    senders.retain(|tx| !tx.send(()).is_err());
+    senders.retain(|tx| tx.send(()).is_ok());
   }
 
   pub async fn decrement(&self) {
     self.value.fetch_sub(1, Ordering::Relaxed);
     let mut senders = self.subscriptions.lock().await;
-    senders.retain(|tx| !tx.send(()).is_err());
+    senders.retain(|tx| tx.send(()).is_ok());
   }
 }

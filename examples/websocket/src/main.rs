@@ -4,7 +4,6 @@
 */
 use std::time::Duration;
 
-use uhttp;
 use uhttp::websocket::WebSocket;
 
 #[tokio::main]

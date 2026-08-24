@@ -36,15 +36,14 @@ async fn main() -> anyhow::Result<()> {
   app.post("/api/counter/decrement", handlers::api_events_counter_decrement_post);
 
   app
-    .without_context()
-    .get("/*", file_server::create(FileServerOptions {
+    .get("/*", uhttp::router::without_context(file_server::create(FileServerOptions {
       dir: PathBuf::from(CARGO_MANIFEST_DIR).join("static"),
       compress: false,
       etag: ETagStrategy::LastModified,
       custom_headers: Default::default(),
       fallback_route: Default::default(),
       fallback_status: Default::default(),
-    }));
+    })));
 
   uhttp::http1::create_server(app.handler())
     .listen("0.0.0.0:8080")

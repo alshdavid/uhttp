@@ -29,7 +29,7 @@ impl Error {
 
   #[cfg(feature = "anyhow")]
   pub fn generic_err(message: impl AsRef<str>) -> Result<()> {
-    return Err(anyhow::anyhow!("{}", message.as_ref()));
+    Err(anyhow::anyhow!("{}", message.as_ref()))
   }
 }
 

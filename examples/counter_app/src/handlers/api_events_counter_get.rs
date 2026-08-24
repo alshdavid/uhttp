@@ -23,7 +23,7 @@ pub async fn api_events_counter_get(
 
   // Listen for updates
   let mut rx = counter_service.subsribe().await;
-  while let Some(_) = rx.recv().await {
+  while rx.recv().await.is_some() {
     let msg = format!("data: {}\n\n", counter_service.get());
     res.write_all(msg.as_bytes()).await?;
   }

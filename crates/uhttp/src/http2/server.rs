@@ -115,10 +115,7 @@ where
                 };
                 res
               }
-              Err(err) => {
-                let x = handle_error(crate::Error::generic(format!("{}", err)));
-                x
-              }
+              Err(err) => handle_error(crate::Error::generic(format!("{}", err))),
             })
           }
         });

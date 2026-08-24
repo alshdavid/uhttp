@@ -2,7 +2,6 @@
   Test with:
     curl http://localhost:8080
 */
-use uhttp;
 use uhttp::AsyncWriteExt;
 
 #[tokio::main]
@@ -14,7 +13,7 @@ async fn main() -> anyhow::Result<()> {
     let result = serde_json::to_vec(&body)?;
 
     res.write_all(&result).await?;
-    return Ok(());
+    Ok(())
   })
   .listen("0.0.0.0:8080")
   .await

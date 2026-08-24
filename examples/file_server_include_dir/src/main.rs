@@ -5,7 +5,6 @@
 
 use include_dir::Dir;
 use include_dir::include_dir;
-use uhttp;
 use uhttp::file_server::FileServerIncludeDirOptions;
 
 // Change this to the directory where the files live

@@ -12,22 +12,22 @@ async fn main() -> anyhow::Result<()> {
   let mut app = uhttp::router::Router::new_without_context();
 
   app.get("/foo", |_req, mut res, _ctx| async move {
-    res.write(b"foo\n").await?;
+    res.write_all(b"foo\n").await?;
     Ok(())
   });
 
   app.post("/bar", |_req, mut res, _ctx| async move {
-    res.write(b"bar\n").await?;
+    res.write_all(b"bar\n").await?;
     Ok(())
   });
 
   app.get("/bar", |_req, mut res, _ctx| async move {
-    res.write(b"bar\n").await?;
+    res.write_all(b"bar\n").await?;
     Ok(())
   });
 
   app.get("/fizz/:buzz", |req, mut res, _ctx| async move {
-    res.write(b"fizz\n").await?;
+    res.write_all(b"fizz\n").await?;
 
     let Some(buzz) = req.url_param("buzz") else {
       res.write_head(uhttp::StatusCode::BAD_REQUEST).await?;
@@ -39,7 +39,7 @@ async fn main() -> anyhow::Result<()> {
   });
 
   app.any("/*", |_req, mut res, _ctx| async move {
-    res.write(b"Not found route").await?;
+    res.write_all(b"Not found route").await?;
     Ok(())
   });
 

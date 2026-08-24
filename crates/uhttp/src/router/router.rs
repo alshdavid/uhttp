@@ -9,7 +9,6 @@ use percent_encoding::percent_decode_str;
 use tokio::io::AsyncWriteExt;
 
 use super::RouteBuilder;
-use super::RouteBuilderNc;
 use crate::Request;
 use crate::Response;
 
@@ -126,17 +125,6 @@ impl<T: Clone + Send + Sync + 'static> Router<T> {
 
     RouteBuilder {
       middleware: vec![middleware],
-      any_routes: Rc::clone(&self.any_routes),
-      get_routes: Rc::clone(&self.get_routes),
-      post_routes: Rc::clone(&self.post_routes),
-      put_routes: Rc::clone(&self.put_routes),
-      patch_routes: Rc::clone(&self.patch_routes),
-      delete_routes: Rc::clone(&self.delete_routes),
-    }
-  }
-
-  pub fn without_context(&mut self) -> RouteBuilderNc<T> {
-    RouteBuilderNc {
       any_routes: Rc::clone(&self.any_routes),
       get_routes: Rc::clone(&self.get_routes),
       post_routes: Rc::clone(&self.post_routes),
@@ -305,12 +293,12 @@ impl<T: Clone + Send + Sync + 'static> Router<T> {
 
         let path = req.uri.path().to_string();
 
-        let routes = match req.method() {
-          &Method::GET => get_routes,
-          &Method::POST => post_routes,
-          &Method::PUT => put_routes,
-          &Method::PATCH => patch_routes,
-          &Method::DELETE => delete_routes,
+        let routes = match *req.method() {
+          Method::GET => get_routes,
+          Method::POST => post_routes,
+          Method::PUT => put_routes,
+          Method::PATCH => patch_routes,
+          Method::DELETE => delete_routes,
           _ => Arc::clone(&any_routes),
         };
 
@@ -337,7 +325,7 @@ impl<T: Clone + Send + Sync + 'static> Router<T> {
         }
 
         handler(req, res, context).await?;
-        return Ok(());
+        Ok(())
       })
     })
   }

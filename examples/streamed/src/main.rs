@@ -6,7 +6,6 @@ use std::time::Duration;
 
 use tokio::io::AsyncWriteExt;
 use tokio::time::sleep;
-use uhttp;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

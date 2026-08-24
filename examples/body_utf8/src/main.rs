@@ -3,7 +3,6 @@
     curl -H "Content-Type: text/plain" -d 'Hello From Client' http://localhost:8080
 */
 use tokio::io::AsyncWriteExt;
-use uhttp;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

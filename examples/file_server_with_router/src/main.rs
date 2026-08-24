@@ -5,7 +5,6 @@
 
 use std::path::PathBuf;
 
-use uhttp;
 use uhttp::AsyncWriteExt;
 use uhttp::StatusCode;
 use uhttp::file_server::ETagStrategy;
@@ -24,16 +23,16 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
   });
 
-  app.without_context().get(
+  app.get(
     "/*",
-    uhttp::file_server::create(FileServerOptions {
+    uhttp::router::without_context(uhttp::file_server::create(FileServerOptions {
       dir: static_files_dir,
       compress: true,
       etag: ETagStrategy::LastModified,
       custom_headers: Default::default(),
       fallback_route: Default::default(),
       fallback_status: Default::default(),
-    }),
+    })),
   );
 
   uhttp::http1::create_server(app.handler())

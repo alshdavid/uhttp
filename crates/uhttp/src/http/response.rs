@@ -103,11 +103,11 @@ impl Response {
 
     let inner = std::mem::replace(&mut *guard, ResponseState::Pending);
     match inner {
-      ResponseState::Builder(_builder) => return Err(crate::Error::generic("Already wrote head")),
-      ResponseState::Stream(_response) => return Err(crate::Error::generic("Already wrote head")),
-      ResponseState::Done => return Err(crate::Error::generic("Response has ended")),
-      ResponseState::Pending => return Err(crate::Error::generic("Currently Writing")),
-    };
+      ResponseState::Builder(_builder) => Err(crate::Error::generic("Already wrote head")),
+      ResponseState::Stream(_response) => Err(crate::Error::generic("Already wrote head")),
+      ResponseState::Done => Err(crate::Error::generic("Response has ended")),
+      ResponseState::Pending => Err(crate::Error::generic("Currently Writing")),
+    }
   }
 }
 

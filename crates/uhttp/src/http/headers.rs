@@ -23,17 +23,11 @@ impl Headers {
         if let Some(headers) = builder.headers_ref().cloned() {
           return Ok(headers);
         };
-        return Err(crate::Error::generic("No headers present"));
+        Err(crate::Error::generic("No headers present"))
       }
-      ResponseState::Stream(_) => {
-        return Err(crate::Error::generic("Headers already sent"));
-      }
-      ResponseState::Done => {
-        return Err(crate::Error::generic("Request already sent"));
-      }
-      ResponseState::Pending => {
-        return Err(crate::Error::generic("Request currently sending"));
-      }
+      ResponseState::Stream(_) => Err(crate::Error::generic("Headers already sent")),
+      ResponseState::Done => Err(crate::Error::generic("Request already sent")),
+      ResponseState::Pending => Err(crate::Error::generic("Request currently sending")),
     }
   }
 
@@ -49,15 +43,9 @@ impl Headers {
         }
         Ok(())
       }
-      ResponseState::Stream(_) => {
-        return Err(crate::Error::generic("Headers already sent"));
-      }
-      ResponseState::Done => {
-        return Err(crate::Error::generic("Request already sent"));
-      }
-      ResponseState::Pending => {
-        return Err(crate::Error::generic("Request currently sending"));
-      }
+      ResponseState::Stream(_) => Err(crate::Error::generic("Headers already sent")),
+      ResponseState::Done => Err(crate::Error::generic("Request already sent")),
+      ResponseState::Pending => Err(crate::Error::generic("Request currently sending")),
     }
   }
 
@@ -78,18 +66,12 @@ impl Headers {
         let Ok(key) = HeaderName::from_bytes(key.as_bytes()) else {
           return Err(crate::Error::generic("Invalid header key"));
         };
-        return Ok(headers.append(key, header));
+        Ok(headers.append(key, header))
       }
-      ResponseState::Stream(_) => {
-        return Err(crate::Error::generic("Headers already sent"));
-      }
-      ResponseState::Done => {
-        return Err(crate::Error::generic("Request already sent"));
-      }
-      ResponseState::Pending => {
-        return Err(crate::Error::generic("Request currently sending"));
-      }
-    };
+      ResponseState::Stream(_) => Err(crate::Error::generic("Headers already sent")),
+      ResponseState::Done => Err(crate::Error::generic("Request already sent")),
+      ResponseState::Pending => Err(crate::Error::generic("Request currently sending")),
+    }
   }
 
   pub async fn set(
@@ -115,18 +97,12 @@ impl Headers {
           }
           return Err(crate::Error::generic("Unable to parse existing header"));
         };
-        return Ok(None);
+        Ok(None)
       }
-      ResponseState::Stream(_) => {
-        return Err(crate::Error::generic("Headers already sent"));
-      }
-      ResponseState::Done => {
-        return Err(crate::Error::generic("Request already sent"));
-      }
-      ResponseState::Pending => {
-        return Err(crate::Error::generic("Request currently sending"));
-      }
-    };
+      ResponseState::Stream(_) => Err(crate::Error::generic("Headers already sent")),
+      ResponseState::Done => Err(crate::Error::generic("Request already sent")),
+      ResponseState::Pending => Err(crate::Error::generic("Request currently sending")),
+    }
   }
 
   pub async fn get(
@@ -135,15 +111,11 @@ impl Headers {
   ) -> Option<String> {
     let guard = self.state.read().await;
     match &*guard {
-      ResponseState::Builder((builder, _)) => {
-        let Some(headers) = builder.headers_ref() else {
-          return None;
-        };
-        headers
-          .get(key)
-          .and_then(|v| v.to_str().ok())
-          .map(|s| s.to_string())
-      }
+      ResponseState::Builder((builder, _)) => builder
+        .headers_ref()?
+        .get(key)
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string()),
       _ => None,
     }
   }

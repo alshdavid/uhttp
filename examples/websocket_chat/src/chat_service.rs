@@ -33,6 +33,6 @@ impl ChatService {
     self.messages.push((author.clone(), message.clone()));
     self
       .subscriptions
-      .retain(|tx| !tx.send((author.clone(), message.clone())).is_err());
+      .retain(|tx| tx.send((author.clone(), message.clone())).is_ok());
   }
 }

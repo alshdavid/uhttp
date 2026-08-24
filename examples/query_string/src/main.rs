@@ -4,7 +4,6 @@
 */
 use std::collections::HashMap;
 
-use uhttp;
 use uhttp::AsyncWriteExt;
 
 #[tokio::main]
@@ -16,7 +15,7 @@ async fn main() -> anyhow::Result<()> {
     res
       .write_all(format!("<body>{:?}</body>", query).as_bytes())
       .await?;
-    return Ok(());
+    Ok(())
   })
   .listen("0.0.0.0:8080")
   .await?;

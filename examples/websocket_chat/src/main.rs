@@ -32,9 +32,7 @@ async fn main() -> anyhow::Result<()> {
   app.any(
     "/api/ws",
     move |req, res, Context { chat_service }: Context| async move {
-      Websocket::upgrade(req, res, |socket| async move {
-        let (mut socket_sender, mut socket_receiver) = socket.split();
-
+      Websocket::upgrade(req, res, |socket_sender, mut socket_receiver| async move {
         // Send action
         tokio::task::spawn({
           let chat_service = Arc::clone(&chat_service);
@@ -47,7 +45,7 @@ async fn main() -> anyhow::Result<()> {
               return;
             };
 
-            if socket_sender.send(msg).await.is_err() {
+            if socket_sender.send_raw(msg).await.is_err() {
               return;
             };
 
@@ -62,7 +60,7 @@ async fn main() -> anyhow::Result<()> {
                 break;
               };
 
-              if socket_sender.send(msg).await.is_err() {
+              if socket_sender.send_raw(msg).await.is_err() {
                 break;
               };
             }
@@ -73,7 +71,7 @@ async fn main() -> anyhow::Result<()> {
         tokio::task::spawn({
           let chat_service = Arc::clone(&chat_service);
           async move {
-            while let Some(msg) = socket_receiver.recv().await? {
+            while let Some(msg) = socket_receiver.recv_raw().await? {
               let uhttp::Message::Text(msg) = msg else {
                 continue;
               };

@@ -273,13 +273,19 @@ use uhttp::websocket::Websocket;
 async fn main() -> anyhow::Result<()> {
   Server::builder()
     .handler(|req, res| async move {
-      Websocket::upgrade(req, res, |mut socket| async move {
+      Websocket::upgrade(req, res, |socket_sender, mut socket_receiver| async move {
         tokio::task::spawn(async move {
           loop {
-            if socket.send("Hello").await.is_err() {
+            if socket_sender.send_raw("Hello").await.is_err() {
               break;
             };
             tokio::time::sleep(Duration::from_millis(1000)).await;
+          }
+        });
+
+        tokio::task::spawn(async move {
+          while let Ok(Some(msg)) = socket_receiver.recv_raw().await {
+            println!("GOT: {:?}", msg);
           }
         });
 

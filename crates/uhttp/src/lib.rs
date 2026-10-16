@@ -18,6 +18,7 @@ mod types;
 #[cfg(feature = "websocket")]
 mod websocket;
 
+pub use http::Method;
 pub use http::StatusCode;
 pub use tokio_util::sync::CancellationToken;
 

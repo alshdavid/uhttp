@@ -296,6 +296,11 @@ impl<T: Clone + Send + Sync + 'static> Router<T> {
           .await;
         };
 
+        // `pattern()` gives the route as registered (with `:param`
+        // placeholders) rather than the concrete path, which is what keeps
+        // telemetry cardinality bounded.
+        req.route = Some(params.pattern());
+
         for (key, value) in params.params() {
           req.params.insert(
             key.to_string(),

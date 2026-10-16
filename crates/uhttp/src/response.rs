@@ -6,6 +6,8 @@ use http::HeaderName;
 use http::HeaderValue;
 use http::StatusCode;
 use http::Version;
+#[cfg(feature = "json")]
+use serde::Serialize;
 
 use super::types::HyperResponseBuilder;
 use crate::ResponseBody;
@@ -91,5 +93,22 @@ impl Response {
       ResponseBody::BoxedBody(body) => self.0.body(body),
     };
     Ok(response?)
+  }
+
+  /// Build a response with an empty body.
+  pub fn empty(self) -> crate::Result<super::types::HyperInfallibleResponse> {
+    self.body(vec![])
+  }
+
+  /// Build a JSON response, setting the `Content-Type` header to
+  /// `application/json`.
+  #[cfg(feature = "json")]
+  pub fn json(
+    self,
+    json: impl Serialize,
+  ) -> crate::Result<super::types::HyperInfallibleResponse> {
+    self
+      .header("Content-Type", "application/json")
+      .body(serde_json::to_vec(&json)?)
   }
 }

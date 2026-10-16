@@ -35,6 +35,15 @@ pub struct Request {
   pub body: Pin<Box<dyn AsyncRead + Send>>,
 
   pub params: HashMap<String, String>,
+
+  /// The route *pattern* this request matched, e.g. `/users/:id` — never the
+  /// concrete path.
+  ///
+  /// Populated by the router after matching. Telemetry should label spans and
+  /// metrics with this rather than `uri.path()`, since the concrete path embeds
+  /// ids and would create unbounded cardinality. `None` means nothing matched
+  /// (the 404 path).
+  pub route: Option<String>,
 }
 
 impl Default for Request {
@@ -47,6 +56,7 @@ impl Default for Request {
       extensions: Default::default(),
       body: Box::pin(tokio::io::empty()),
       params: Default::default(),
+      route: None,
     }
   }
 }
@@ -87,6 +97,8 @@ impl Request {
       extensions: parts.extensions,
       params: HashMap::new(),
       body: Box::pin(body),
+      // Set by the router once a route matches; see the field docs.
+      route: None,
     }
   }
 

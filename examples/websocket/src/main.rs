@@ -11,12 +11,10 @@ use uhttp::Websocket;
 async fn main() -> anyhow::Result<()> {
   Server::builder()
     .handler(|req, res| async move {
-      Websocket::upgrade(req, res, |socket| async move {
-        let (mut socket_sender, mut socket_receiver) = socket.split();
-
+      Websocket::upgrade(req, res, |socket_sender, mut socket_receiver| async move {
         tokio::task::spawn(async move {
           loop {
-            if socket_sender.send("Hello").await.is_err() {
+            if socket_sender.send_raw("Hello").await.is_err() {
               break;
             };
             tokio::time::sleep(Duration::from_millis(1000)).await;
@@ -24,7 +22,7 @@ async fn main() -> anyhow::Result<()> {
         });
 
         tokio::task::spawn(async move {
-          while let Ok(Some(msg)) = socket_receiver.recv().await {
+          while let Ok(Some(msg)) = socket_receiver.recv_raw().await {
             println!("GOT: {:?}", msg);
           }
         });

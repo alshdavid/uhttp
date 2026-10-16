@@ -27,6 +27,8 @@ tokio = { workspace = true, features = [
   "fs",
   "net",
   "macros",
+  "sync",
+  "time",
 ] }
 tokio-util = { workspace = true, features = ["io", "io-util", "futures-util"] }
 

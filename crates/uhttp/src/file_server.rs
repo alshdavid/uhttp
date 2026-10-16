@@ -207,7 +207,7 @@ async fn etag_file(
       let file_handle_copy = file.try_clone().await?;
       let mut reader = BufReader::new(file_handle_copy);
       let mut hasher = DefaultHasher::new();
-      let mut buffer = [0u8; 64 * 1024];
+      let mut buffer = [0u8; BODY_BUFFER_SIZE];
 
       loop {
         let n = reader.read(&mut buffer).await?;

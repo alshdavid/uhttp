@@ -17,9 +17,10 @@ async fn main() -> anyhow::Result<()> {
 
   Server::builder()
     .handler(uhttp::file_server::create(FileServerOptions {
-      dir: static_files_dir,
+      root_dir: static_files_dir,
       file_system: uhttp::file_server::TokioFileSystem::new(),
       compress: true,
+      implicit_extensions: true,
       etag: ETagStrategy::LastModified,
       custom_headers: Default::default(),
       fallback_route: Some("index.html".to_string()),

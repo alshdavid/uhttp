@@ -12,7 +12,7 @@ use super::encoding::Encoding;
 use super::encoding::negotiate_encoding;
 use super::etag::etag_file;
 use super::file_system::AsyncFileSystem;
-use super::resolver::determine_file;
+use super::resolver::resolve_implicit_extension;
 use crate::HandleFunc;
 use crate::Request;
 use crate::ResponseBody;
@@ -20,7 +20,7 @@ use crate::StatusCode;
 use crate::headers;
 
 /// Size of the buffer bodies are streamed through on their way to the client
-pub(crate) const BODY_BUFFER_SIZE: usize = 64 * 1024;
+pub const BODY_BUFFER_SIZE: usize = 64 * 1024;
 
 #[derive(Debug, Default)]
 pub enum ETagStrategy {
@@ -37,7 +37,7 @@ pub struct FileServerOptions {
   /// The filesystem files are read from
   pub file_system: Arc<dyn AsyncFileSystem>,
   /// The root directory to get files from
-  pub dir: PathBuf,
+  pub root_dir: PathBuf,
   /// Send back compressed responses
   pub compress: bool,
   /// How to supply etag
@@ -48,6 +48,10 @@ pub struct FileServerOptions {
   pub fallback_route: Option<String>,
   /// Defaults to [`crate::StatusCode::NOT_FOUND] (404)
   pub fallback_status: Option<StatusCode>,
+  /// Try to resolve html files on paths without specified files
+  ///  `/`    -> `/index.html`
+  ///  `/foo` -> `/foo/index.html` | `/foo.html`
+  pub implicit_extensions: bool,
 }
 
 impl std::fmt::Debug for FileServerOptions {
@@ -56,7 +60,7 @@ impl std::fmt::Debug for FileServerOptions {
     f: &mut std::fmt::Formatter<'_>,
   ) -> std::fmt::Result {
     f.debug_struct("FileServerOptions")
-      .field("dir", &self.dir)
+      .field("dir", &self.root_dir)
       .field("compress", &self.compress)
       .field("etag", &self.etag)
       .field("custom_headers", &self.custom_headers)
@@ -71,8 +75,8 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
   let options = Arc::new(options);
 
   let fallback_path = Arc::new(match options.fallback_route.as_ref() {
-    Some(path) => options.dir.join(path),
-    None => options.dir.join("404.html"),
+    Some(path) => options.root_dir.join(path),
+    None => options.root_dir.join("404.html"),
   });
 
   let fallback_status = match options.fallback_status.as_ref() {
@@ -88,10 +92,17 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
     let fallback_ext = Arc::clone(&fallback_ext);
 
     Box::pin(async move {
-      let url_path = determine_file(req.uri.path());
+      let url_path = req.uri.path();
+      let url_path = match options.implicit_extensions {
+        true => {
+          resolve_implicit_extension(&*options.file_system, &options.root_dir, url_path).await?
+        }
+        false => PathBuf::from(url_path),
+      };
+
       let mut extension = &url_path.try_extension()?;
       let mut status = StatusCode::OK;
-      let file_path = options.dir.join(&url_path);
+      let file_path = options.root_dir.join(&url_path);
 
       for (key, value) in &options.custom_headers {
         res = res.header(key.as_str(), value.as_str());

@@ -103,7 +103,7 @@ async fn main() -> anyhow::Result<()> {
       custom_headers: Default::default(),
       fallback_route: Default::default(),
       fallback_status: Default::default(),
-    })),
+    })?),
   );
 
   Server::builder()

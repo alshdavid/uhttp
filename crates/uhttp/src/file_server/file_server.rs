@@ -48,20 +48,25 @@ pub struct FileServerOptions {
 }
 
 /// Serve files from the filesystem
-pub fn create(options: FileServerOptions) -> HandleFunc {
+pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
   let options = Arc::new(options);
+
   let fallback_path = Arc::new(match options.fallback_route.as_ref() {
     Some(path) => options.dir.join(path),
     None => options.dir.join("404.html"),
   });
+
   let fallback_status = match options.fallback_status.as_ref() {
     Some(status) => *status,
     None => StatusCode::NOT_FOUND,
   };
 
-  Box::new(move |req, mut res| {
+  let fallback_ext = Arc::new(try_extension(&fallback_path)?.to_string());
+
+  Ok(Box::new(move |req, mut res| {
     let options = Arc::clone(&options);
     let fallback_path = Arc::clone(&fallback_path);
+    let fallback_ext = Arc::clone(&fallback_ext);
 
     Box::pin(async move {
       let url_path = determine_file(req.uri.path());
@@ -77,7 +82,7 @@ pub fn create(options: FileServerOptions) -> HandleFunc {
         Err(_) => match tokio::fs::File::open(&*fallback_path).await {
           Ok(file) => {
             status = fallback_status;
-            extension = try_extension(&fallback_path)?;
+            extension = &fallback_ext;
             file
           }
           Err(_) => return res.status(StatusCode::NOT_FOUND).body(""),
@@ -120,7 +125,7 @@ pub fn create(options: FileServerOptions) -> HandleFunc {
 
       res.status(status).body(body)
     })
-  })
+  }))
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -207,7 +212,7 @@ async fn etag_file(
       let file_handle_copy = file.try_clone().await?;
       let mut reader = BufReader::new(file_handle_copy);
       let mut hasher = DefaultHasher::new();
-      let mut buffer = [0u8; 64 * 1024];
+      let mut buffer = [0u8; BODY_BUFFER_SIZE];
 
       loop {
         let n = reader.read(&mut buffer).await?;

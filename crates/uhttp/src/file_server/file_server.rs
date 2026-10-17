@@ -6,12 +6,12 @@ use tokio::io::AsyncWriteExt;
 
 use super::compression::brotli_stream;
 use super::compression::gzip_stream;
-use super::compression::try_extension;
 use super::compression::zstd_stream;
 use super::encoding::Encoding;
 use super::encoding::negotiate_encoding;
 use super::etag::etag_file;
 use super::resolver::determine_file;
+use super::resolver::try_extension;
 use crate::HandleFunc;
 use crate::Request;
 use crate::ResponseBody;

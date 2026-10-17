@@ -11,7 +11,7 @@ full = ["json", "router", "websocket", "file_server"]
 json = ["dep:serde_json"]
 router = ["dep:percent-encoding", "dep:path-tree", "dep:base64"]
 websocket = ["dep:tokio-tungstenite"]
-file_server = ["dep:mime_guess", "dep:async-compression"]
+file_server = ["dep:mime_guess", "dep:async-compression", "dep:dyn_fs"]
 
 [lints]
 workspace = true
@@ -62,4 +62,6 @@ brotli = { workspace = true, optional = true }
 
 # Optional dependencies for query string parsing
 serde_urlencoded = { workspace = true }
-dyn_fs = { version = "0.0.11", features = ["async"] }
+
+# Optional dependency for the file server filesystem abstraction
+dyn_fs = { version = "0.0.11", features = ["async"], optional = true }

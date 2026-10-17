@@ -11,6 +11,8 @@ use serde::Serialize;
 
 use super::types::HyperResponseBuilder;
 use crate::ResponseBody;
+#[cfg(feature = "json")]
+use crate::headers;
 
 pub struct Response(HyperResponseBuilder);
 
@@ -108,7 +110,7 @@ impl Response {
     json: impl Serialize,
   ) -> crate::Result<super::types::HyperInfallibleResponse> {
     self
-      .header("Content-Type", "application/json")
+      .header(headers::CONTENT_TYPE, "application/json")
       .body(serde_json::to_vec(&json)?)
   }
 }

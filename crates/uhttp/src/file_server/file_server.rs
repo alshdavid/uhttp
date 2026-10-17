@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use dyn_fs::ext::PathExt;
 use tokio::io::AsyncWriteExt;
 
 use super::compression::brotli_stream;
@@ -12,11 +13,11 @@ use super::encoding::negotiate_encoding;
 use super::etag::etag_file;
 use super::file_system::AsyncFileSystem;
 use super::resolver::determine_file;
-use super::resolver::try_extension;
 use crate::HandleFunc;
 use crate::Request;
 use crate::ResponseBody;
 use crate::StatusCode;
+use crate::headers;
 
 /// Size of the buffer bodies are streamed through on their way to the client
 pub(crate) const BODY_BUFFER_SIZE: usize = 64 * 1024;
@@ -33,10 +34,10 @@ pub enum ETagStrategy {
 }
 
 pub struct FileServerOptions {
-  /// The root directory to get files from
-  pub dir: PathBuf,
   /// The filesystem files are read from
   pub file_system: Arc<dyn AsyncFileSystem>,
+  /// The root directory to get files from
+  pub dir: PathBuf,
   /// Send back compressed responses
   pub compress: bool,
   /// How to supply etag
@@ -79,7 +80,7 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
     None => StatusCode::NOT_FOUND,
   };
 
-  let fallback_ext = Arc::new(try_extension(&fallback_path)?.to_string());
+  let fallback_ext = Arc::new(fallback_path.try_extension()?);
 
   Ok(Box::new(move |req, mut res| {
     let options = Arc::clone(&options);
@@ -88,7 +89,7 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
 
     Box::pin(async move {
       let url_path = determine_file(req.uri.path());
-      let mut extension = try_extension(&url_path)?;
+      let mut extension = &url_path.try_extension()?;
       let mut status = StatusCode::OK;
       let file_path = options.dir.join(&url_path);
 
@@ -101,7 +102,7 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
         Err(_) => match options.file_system.open(&fallback_path).await {
           Ok(file) => {
             status = fallback_status;
-            extension = &fallback_ext;
+            extension = &*fallback_ext;
             file
           }
           Err(_) => return res.status(StatusCode::NOT_FOUND).body(""),
@@ -112,19 +113,19 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
         .first_or_octet_stream()
         .to_string();
 
-      res = res.header("Content-Type", mime_type.as_str());
+      res = res.header(headers::CONTENT_TYPE, mime_type.as_str());
 
       let encoding = negotiate_encoding(&req, options.compress);
 
       if let Some(content_encoding) = encoding.header_value() {
-        res = res.header("Content-Encoding", content_encoding);
+        res = res.header(headers::CONTENT_ENCODING, content_encoding);
       }
 
       if let Some(etag) = etag_file(&mut *file, &options.etag, encoding.etag_suffix()).await? {
         if !has_modified(&req, &etag) {
           return res.status(StatusCode::NOT_MODIFIED).body("");
         }
-        res = res.header("ETag", etag.as_str());
+        res = res.header(headers::ETAG, etag.as_str());
       }
 
       let (body, mut writer) = ResponseBody::chunked(BODY_BUFFER_SIZE);
@@ -151,7 +152,7 @@ fn has_modified(
   req: &Request,
   etag: &str,
 ) -> bool {
-  if let Some(if_none_match) = req.headers.get("If-None-Match")
+  if let Some(if_none_match) = req.headers.get(headers::IF_NONE_MATCH)
     && if_none_match == etag
   {
     return false;

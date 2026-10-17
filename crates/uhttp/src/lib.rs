@@ -4,6 +4,7 @@ pub mod body;
 #[cfg(feature = "file_server")]
 pub mod file_server;
 mod handler;
+pub mod headers;
 #[cfg(feature = "router")]
 pub mod middleware;
 mod request;

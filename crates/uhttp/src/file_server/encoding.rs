@@ -1,4 +1,5 @@
 use crate::Request;
+use crate::headers;
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum Encoding {
@@ -33,7 +34,7 @@ pub(crate) fn negotiate_encoding(
     return Encoding::Identity;
   }
 
-  let Some(accept_encoding) = req.headers.get("Accept-Encoding") else {
+  let Some(accept_encoding) = req.headers.get(headers::ACCEPT_ENCODING) else {
     return Encoding::Identity;
   };
 

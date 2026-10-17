@@ -1,13 +1,13 @@
 use std::collections::HashMap;
-use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use tokio::io::AsyncRead;
-use tokio::io::AsyncWrite;
 use tokio::io::AsyncWriteExt;
-use tokio::io::BufReader;
 
+use super::compression::brotli_stream;
+use super::compression::gzip_stream;
+use super::compression::try_extension;
+use super::compression::zstd_stream;
 use super::encoding::Encoding;
 use super::encoding::negotiate_encoding;
 use super::etag::etag_file;
@@ -147,55 +147,4 @@ fn determine_file(input: &str) -> PathBuf {
   } else {
     PathBuf::from(format!("{}.html", input.trim_start_matches("/")))
   }
-}
-
-async fn gzip_stream<R, W>(
-  input: R,
-  output: &mut W,
-) -> Result<u64, std::io::Error>
-where
-  R: AsyncRead + Unpin,
-  W: AsyncWrite + Unpin,
-{
-  use async_compression::tokio::bufread::GzipEncoder;
-  let mut encoder = GzipEncoder::new(BufReader::new(input));
-  tokio::io::copy(&mut encoder, output).await
-}
-
-async fn brotli_stream<R, W>(
-  input: R,
-  output: &mut W,
-) -> Result<u64, std::io::Error>
-where
-  R: AsyncRead + Unpin,
-  W: AsyncWrite + Unpin,
-{
-  use async_compression::tokio::bufread::BrotliEncoder;
-  let mut encoder = BrotliEncoder::new(BufReader::new(input));
-  tokio::io::copy(&mut encoder, output).await
-}
-
-async fn zstd_stream<R, W>(
-  input: R,
-  output: &mut W,
-) -> Result<u64, std::io::Error>
-where
-  R: AsyncRead + Unpin,
-  W: AsyncWrite + Unpin,
-{
-  use async_compression::tokio::bufread::ZstdEncoder;
-  let mut encoder = ZstdEncoder::new(BufReader::new(input));
-  tokio::io::copy(&mut encoder, output).await
-}
-
-fn try_extension(input: &Path) -> crate::Result<&str> {
-  let Some(ext) = input.extension() else {
-    return Ok(Default::default());
-  };
-
-  let Some(ext) = ext.to_str() else {
-    return Ok(Default::default());
-  };
-
-  Ok(ext)
 }

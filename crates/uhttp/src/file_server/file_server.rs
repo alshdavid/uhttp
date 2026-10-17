@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use dyn_fs::ext::PathExt;
+use mime_guess::Mime;
 use tokio::io::AsyncWriteExt;
 
 use super::compression::brotli_stream;
@@ -11,7 +12,11 @@ use super::compression::zstd_stream;
 use super::encoding::Encoding;
 use super::encoding::negotiate_encoding;
 use super::etag::etag_file;
+use super::fallback_file::FallbackFile;
+use super::fallback_file::FallbackFileResolveOptions;
 use super::file_system::AsyncFileSystem;
+use super::mime::detect_mime;
+use super::resolver::ResolveImplicitExtensionOptions;
 use super::resolver::resolve_implicit_extension;
 use crate::HandleFunc;
 use crate::Request;
@@ -54,77 +59,60 @@ pub struct FileServerOptions {
   pub implicit_extensions: bool,
 }
 
-impl std::fmt::Debug for FileServerOptions {
-  fn fmt(
-    &self,
-    f: &mut std::fmt::Formatter<'_>,
-  ) -> std::fmt::Result {
-    f.debug_struct("FileServerOptions")
-      .field("dir", &self.root_dir)
-      .field("compress", &self.compress)
-      .field("etag", &self.etag)
-      .field("custom_headers", &self.custom_headers)
-      .field("fallback_route", &self.fallback_route)
-      .field("fallback_status", &self.fallback_status)
-      .finish_non_exhaustive()
-  }
-}
-
 /// Serve files from the filesystem
 pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
   let options = Arc::new(options);
 
-  let fallback_path = Arc::new(match options.fallback_route.as_ref() {
-    Some(path) => options.root_dir.join(path),
-    None => options.root_dir.join("404.html"),
-  });
-
-  let fallback_status = match options.fallback_status.as_ref() {
-    Some(status) => *status,
-    None => StatusCode::NOT_FOUND,
-  };
-
-  let fallback_ext = Arc::new(fallback_path.try_extension()?);
+  let fallback = Arc::new(FallbackFile::resolve(FallbackFileResolveOptions {
+    root_dir: &options.root_dir,
+    fallback_route: &options.fallback_route,
+    fallback_status: &options.fallback_status,
+  }));
 
   Ok(Box::new(move |req, mut res| {
     let options = Arc::clone(&options);
-    let fallback_path = Arc::clone(&fallback_path);
-    let fallback_ext = Arc::clone(&fallback_ext);
+    let fallback = Arc::clone(&fallback);
 
     Box::pin(async move {
-      let url_path = req.uri.path();
       let url_path = match options.implicit_extensions {
         true => {
-          resolve_implicit_extension(&*options.file_system, &options.root_dir, url_path).await?
+          resolve_implicit_extension(ResolveImplicitExtensionOptions {
+            fs: &*options.file_system,
+            root_dir: &options.root_dir,
+            input: req.uri.path(),
+          })
+          .await?
         }
-        false => PathBuf::from(url_path),
+        false => PathBuf::from(req.uri.path()),
       };
 
-      let mut extension = &url_path.try_extension()?;
-      let mut status = StatusCode::OK;
       let file_path = options.root_dir.join(&url_path);
+
+      let mut status = StatusCode::OK;
+      let mut mime_type = Option::<Mime>::None;
 
       for (key, value) in &options.custom_headers {
         res = res.header(key.as_str(), value.as_str());
       }
 
       let mut file = match options.file_system.open(&file_path).await {
-        Ok(file) => file,
-        Err(_) => match options.file_system.open(&fallback_path).await {
+        Ok(file) => {
+          mime_type.replace(detect_mime(&url_path));
+          file
+        }
+        Err(_) => match options.file_system.open(&fallback.path).await {
           Ok(file) => {
-            status = fallback_status;
-            extension = &*fallback_ext;
+            status = fallback.status;
+            mime_type.replace(fallback.mime_type.clone());
             file
           }
-          Err(_) => return res.status(StatusCode::NOT_FOUND).body(""),
+          Err(_) => return res.status(StatusCode::NOT_FOUND).empty(),
         },
       };
 
-      let mime_type = mime_guess::from_ext(extension)
-        .first_or_octet_stream()
-        .to_string();
-
-      res = res.header(headers::CONTENT_TYPE, mime_type.as_str());
+      if let Some(mime_type) = mime_type.as_ref() {
+        res = res.header(headers::CONTENT_TYPE, mime_type.to_string());
+      }
 
       let encoding = negotiate_encoding(&req, options.compress);
 
@@ -134,7 +122,7 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
 
       if let Some(etag) = etag_file(&mut *file, &options.etag, encoding.etag_suffix()).await? {
         if !has_modified(&req, &etag) {
-          return res.status(StatusCode::NOT_MODIFIED).body("");
+          return res.status(StatusCode::NOT_MODIFIED).empty();
         }
         res = res.header(headers::ETAG, etag.as_str());
       }

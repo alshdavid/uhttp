@@ -196,9 +196,9 @@ dependencies = [
 
 [[package]]
 name = "dyn_fs"
-version = "0.0.12"
+version = "0.0.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f7edfdf684bf273470ba26d73cdf07412efd12cd6d0f3266e6aa86ca0e9880b"
+checksum = "5694e6602d133e86c0bd471c7648fa047fdb171d0fd9d5c478b0547d1e691b76"
 dependencies = [
  "tokio",
 ]

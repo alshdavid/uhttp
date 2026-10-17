@@ -94,7 +94,7 @@ async fn main() -> anyhow::Result<()> {
   Server::builder()
     .handler(uhttp::file_server::create(FileServerOptions {
       dir: static_files_dir,
-      file_system: std::sync::Arc::new(uhttp::file_server::TokioFileSystem),
+      file_system: uhttp::file_server::TokioFileSystem::new(),
       // JIT Compression
       compress: true,
       // ETag to prevent client from making multiple requests

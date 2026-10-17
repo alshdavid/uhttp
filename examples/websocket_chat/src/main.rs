@@ -98,7 +98,7 @@ async fn main() -> anyhow::Result<()> {
     "/*",
     uhttp::router::without_context(file_server::create(FileServerOptions {
       dir: PathBuf::from(CARGO_MANIFEST_DIR).join("static"),
-      file_system: std::sync::Arc::new(uhttp::file_server::TokioFileSystem),
+      file_system: uhttp::file_server::TokioFileSystem::new(),
       compress: false,
       etag: ETagStrategy::LastModified,
       custom_headers: Default::default(),

@@ -25,7 +25,7 @@ async fn main() -> anyhow::Result<()> {
     "/*",
     uhttp::router::without_context(uhttp::file_server::create(FileServerOptions {
       dir: static_files_dir,
-      file_system: std::sync::Arc::new(uhttp::file_server::TokioFileSystem),
+      file_system: uhttp::file_server::TokioFileSystem::new(),
       compress: true,
       etag: ETagStrategy::LastModified,
       custom_headers: Default::default(),

@@ -133,5 +133,5 @@ jobs:
           VERSION: ${{needs.version.outputs.VERSION}}
         run: |
           set -e
-          sed "s/0.0.0-local/${VERSION}/g" "Cargo.toml" > "Cargo.toml.new" && mv "Cargo.toml.new" "Cargo.toml"
-          cargo publish --allow-dirty
+          sed "s/0.0.0-local/${VERSION}/g" "crates/uhttp/Cargo.toml" > "crates/uhttp/Cargo.toml.new" && mv "crates/uhttp/Cargo.toml.new" "crates/uhttp/Cargo.toml"
+          cargo publish --allow-dirty -p uhttp

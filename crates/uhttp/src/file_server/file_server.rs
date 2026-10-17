@@ -1,26 +1,23 @@
 use std::collections::HashMap;
-use std::hash::DefaultHasher;
-use std::hash::Hasher;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use tokio::io::AsyncRead;
-use tokio::io::AsyncReadExt;
-use tokio::io::AsyncSeekExt;
 use tokio::io::AsyncWrite;
 use tokio::io::AsyncWriteExt;
 use tokio::io::BufReader;
 
 use super::encoding::Encoding;
 use super::encoding::negotiate_encoding;
+use super::etag::etag_file;
 use crate::HandleFunc;
 use crate::Request;
 use crate::ResponseBody;
 use crate::StatusCode;
 
 /// Size of the buffer bodies are streamed through on their way to the client
-const BODY_BUFFER_SIZE: usize = 64 * 1024;
+pub(crate) const BODY_BUFFER_SIZE: usize = 64 * 1024;
 
 #[derive(Debug, Default)]
 pub enum ETagStrategy {
@@ -149,48 +146,6 @@ fn determine_file(input: &str) -> PathBuf {
     PathBuf::from(input.trim_start_matches("/"))
   } else {
     PathBuf::from(format!("{}.html", input.trim_start_matches("/")))
-  }
-}
-
-async fn etag_file(
-  file: &mut tokio::fs::File,
-  strategy: &ETagStrategy,
-  encoding: &str,
-) -> Result<Option<String>, std::io::Error> {
-  match strategy {
-    ETagStrategy::Hash => {
-      let file_handle_copy = file.try_clone().await?;
-      let mut reader = BufReader::new(file_handle_copy);
-      let mut hasher = DefaultHasher::new();
-      let mut buffer = [0u8; BODY_BUFFER_SIZE];
-
-      loop {
-        let n = reader.read(&mut buffer).await?;
-        if n == 0 {
-          break;
-        }
-        hasher.write(&buffer[..n]);
-      }
-
-      file.seek(std::io::SeekFrom::Start(0)).await?;
-
-      Ok(Some(format!("{:016x}{}", hasher.finish(), encoding)))
-    }
-    ETagStrategy::LastModified => {
-      let meta = file.metadata().await?;
-      let etag = format!(
-        "{:x}{:x}{}",
-        meta
-          .modified()?
-          .duration_since(std::time::UNIX_EPOCH)
-          .unwrap()
-          .as_nanos(),
-        meta.len(),
-        encoding,
-      );
-      Ok(Some(etag))
-    }
-    ETagStrategy::Disabled => Ok(None),
   }
 }
 

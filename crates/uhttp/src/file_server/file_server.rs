@@ -11,6 +11,7 @@ use super::compression::zstd_stream;
 use super::encoding::Encoding;
 use super::encoding::negotiate_encoding;
 use super::etag::etag_file;
+use super::resolver::determine_file;
 use crate::HandleFunc;
 use crate::Request;
 use crate::ResponseBody;
@@ -137,14 +138,4 @@ fn has_modified(
     return false;
   }
   true
-}
-
-fn determine_file(input: &str) -> PathBuf {
-  if input == "/" {
-    PathBuf::from("/index.html".trim_start_matches("/"))
-  } else if PathBuf::from(input).extension().is_some() {
-    PathBuf::from(input.trim_start_matches("/"))
-  } else {
-    PathBuf::from(format!("{}.html", input.trim_start_matches("/")))
-  }
 }

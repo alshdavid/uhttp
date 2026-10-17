@@ -1,0 +1,11 @@
+use std::path::PathBuf;
+
+pub(crate) fn determine_file(input: &str) -> PathBuf {
+  if input == "/" {
+    PathBuf::from("/index.html".trim_start_matches("/"))
+  } else if PathBuf::from(input).extension().is_some() {
+    PathBuf::from(input.trim_start_matches("/"))
+  } else {
+    PathBuf::from(format!("{}.html", input.trim_start_matches("/")))
+  }
+}

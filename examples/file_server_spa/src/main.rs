@@ -23,7 +23,7 @@ async fn main() -> anyhow::Result<()> {
       custom_headers: Default::default(),
       fallback_route: Some("index.html".to_string()),
       fallback_status: Some(StatusCode::OK),
-    }))
+    })?)
     .listen("0.0.0.0:8080")
     .await?;
 

@@ -10,6 +10,7 @@ use super::compression::zstd_stream;
 use super::encoding::Encoding;
 use super::encoding::negotiate_encoding;
 use super::etag::etag_file;
+use super::file_system::AsyncFileSystem;
 use super::resolver::determine_file;
 use super::resolver::try_extension;
 use crate::HandleFunc;
@@ -31,10 +32,11 @@ pub enum ETagStrategy {
   Disabled,
 }
 
-#[derive(Debug)]
 pub struct FileServerOptions {
   /// The root directory to get files from
   pub dir: PathBuf,
+  /// The filesystem files are read from
+  pub file_system: Arc<dyn AsyncFileSystem>,
   /// Send back compressed responses
   pub compress: bool,
   /// How to supply etag
@@ -45,6 +47,22 @@ pub struct FileServerOptions {
   pub fallback_route: Option<String>,
   /// Defaults to [`crate::StatusCode::NOT_FOUND] (404)
   pub fallback_status: Option<StatusCode>,
+}
+
+impl std::fmt::Debug for FileServerOptions {
+  fn fmt(
+    &self,
+    f: &mut std::fmt::Formatter<'_>,
+  ) -> std::fmt::Result {
+    f.debug_struct("FileServerOptions")
+      .field("dir", &self.dir)
+      .field("compress", &self.compress)
+      .field("etag", &self.etag)
+      .field("custom_headers", &self.custom_headers)
+      .field("fallback_route", &self.fallback_route)
+      .field("fallback_status", &self.fallback_status)
+      .finish_non_exhaustive()
+  }
 }
 
 /// Serve files from the filesystem
@@ -72,14 +90,15 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
       let url_path = determine_file(req.uri.path());
       let mut extension = try_extension(&url_path)?;
       let mut status = StatusCode::OK;
+      let file_path = options.dir.join(&url_path);
 
       for (key, value) in &options.custom_headers {
         res = res.header(key.as_str(), value.as_str());
       }
 
-      let mut file = match tokio::fs::File::open(&options.dir.join(&url_path)).await {
+      let mut file = match options.file_system.open(&file_path).await {
         Ok(file) => file,
-        Err(_) => match tokio::fs::File::open(&*fallback_path).await {
+        Err(_) => match options.file_system.open(&fallback_path).await {
           Ok(file) => {
             status = fallback_status;
             extension = &fallback_ext;
@@ -101,7 +120,7 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
         res = res.header("Content-Encoding", content_encoding);
       }
 
-      if let Some(etag) = etag_file(&mut file, &options.etag, encoding.etag_suffix()).await? {
+      if let Some(etag) = etag_file(&mut *file, &options.etag, encoding.etag_suffix()).await? {
         if !has_modified(&req, &etag) {
           return res.status(StatusCode::NOT_MODIFIED).body("");
         }

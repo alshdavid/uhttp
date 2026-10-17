@@ -3,25 +3,23 @@ use std::hash::Hasher;
 
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncSeekExt;
-use tokio::io::BufReader;
 
 use super::file_server::BODY_BUFFER_SIZE;
 use super::file_server::ETagStrategy;
+use super::file_system::AsyncFile;
 
 pub(crate) async fn etag_file(
-  file: &mut tokio::fs::File,
+  file: &mut dyn AsyncFile,
   strategy: &ETagStrategy,
   encoding: &str,
 ) -> Result<Option<String>, std::io::Error> {
   match strategy {
     ETagStrategy::Hash => {
-      let file_handle_copy = file.try_clone().await?;
-      let mut reader = BufReader::new(file_handle_copy);
       let mut hasher = DefaultHasher::new();
       let mut buffer = [0u8; BODY_BUFFER_SIZE];
 
       loop {
-        let n = reader.read(&mut buffer).await?;
+        let n = file.read(&mut buffer).await?;
         if n == 0 {
           break;
         }

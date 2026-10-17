@@ -18,6 +18,7 @@ async fn main() -> anyhow::Result<()> {
   Server::builder()
     .handler(uhttp::file_server::create(FileServerOptions {
       dir: static_files_dir,
+      file_system: std::sync::Arc::new(uhttp::file_server::TokioFileSystem),
       compress: true,
       etag: ETagStrategy::LastModified,
       custom_headers: Default::default(),

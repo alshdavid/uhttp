@@ -112,6 +112,30 @@ async fn transpile_source(
   .ok()
 }
 
+/// Stream an in-memory body to the client, applying the negotiated content
+/// encoding on the way.
+#[cfg(feature = "file_server_transpile")]
+fn encode_body(
+  encoding: Encoding,
+  content: String,
+) -> ResponseBody {
+  let (body, mut writer) = ResponseBody::chunked(BODY_BUFFER_SIZE);
+
+  tokio::task::spawn(async move {
+    let input = content.as_bytes();
+
+    let _ = match encoding {
+      Encoding::Zstd => zstd_stream(input, &mut writer).await,
+      Encoding::Brotli => brotli_stream(input, &mut writer).await,
+      Encoding::Gzip => gzip_stream(input, &mut writer).await,
+      Encoding::Identity => uncompressed_stream(input, &mut writer).await,
+    };
+    let _ = writer.shutdown().await;
+  });
+
+  body
+}
+
 pub struct FileServerOptions {
   /// The filesystem files are read from
   pub file_system: Arc<dyn AsyncFileSystem>,
@@ -177,6 +201,13 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
         Err(e) => return Err(e.into()),
       };
 
+      // The encoding is needed by the transpile path as well as the static
+      // file path, so it is negotiated up front.
+      let encoding = match encoding_resolver.as_ref() {
+        Some(resolver) => resolver.resolve(&req),
+        None => Encoding::Identity,
+      };
+
       // JIT transpile TypeScript sources. The request names the source file
       // directly; the transpiled module is served from memory and requests for
       // a sibling `.js` file are never resolved to it here.
@@ -202,14 +233,11 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
 
             res = res.header(headers::CONTENT_TYPE, SOURCE_MAP_CONTENT_TYPE);
 
-            let (body, mut writer) = ResponseBody::chunked(BODY_BUFFER_SIZE);
+            if let Some(content_encoding) = encoding.header_value() {
+              res = res.header(headers::CONTENT_ENCODING, content_encoding);
+            }
 
-            tokio::task::spawn(async move {
-              let _ = writer.write_all(map.as_bytes()).await;
-              let _ = writer.shutdown().await;
-            });
-
-            return res.status(StatusCode::OK).body(body);
+            return res.status(StatusCode::OK).body(encode_body(encoding, map));
           }
         }
 
@@ -243,21 +271,13 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
             (_, None) => result.code,
           };
 
-          let (body, mut writer) = ResponseBody::chunked(BODY_BUFFER_SIZE);
+          if let Some(content_encoding) = encoding.header_value() {
+            res = res.header(headers::CONTENT_ENCODING, content_encoding);
+          }
 
-          tokio::task::spawn(async move {
-            let _ = writer.write_all(code.as_bytes()).await;
-            let _ = writer.shutdown().await;
-          });
-
-          return res.status(StatusCode::OK).body(body);
+          return res.status(StatusCode::OK).body(encode_body(encoding, code));
         }
       }
-
-      let encoding = match encoding_resolver.as_ref() {
-        Some(resolver) => resolver.resolve(&req),
-        None => Encoding::Identity,
-      };
 
       let cache_key = resolved
         .as_ref()

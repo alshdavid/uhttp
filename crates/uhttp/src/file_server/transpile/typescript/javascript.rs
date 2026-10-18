@@ -1,3 +1,5 @@
+use std::io;
+
 use swc_core::common::FileName;
 use swc_core::common::GLOBALS;
 use swc_core::common::Globals;
@@ -31,7 +33,7 @@ use super::OptimizeOptions;
 pub fn optimize_module(
   source: &str,
   options: OptimizeOptions,
-) -> anyhow::Result<String> {
+) -> crate::Result<String> {
   if !options.is_enabled() {
     return Ok(source.to_string());
   }
@@ -51,7 +53,7 @@ pub fn optimize_module(
 
   let program = parser
     .parse_program()
-    .map_err(|error| anyhow::anyhow!("Parse error: {}", error.kind().msg()))?;
+    .map_err(|error| io::Error::other(format!("Parse error: {}", error.kind().msg())))?;
 
   let errors: Vec<String> = parser
     .take_errors()
@@ -60,7 +62,7 @@ pub fn optimize_module(
     .collect();
 
   if !errors.is_empty() {
-    anyhow::bail!("Parse errors: {}", errors.join(", "));
+    return Err(io::Error::other(format!("Parse errors: {}", errors.join(", "))).into());
   }
 
   let globals = Globals::default();

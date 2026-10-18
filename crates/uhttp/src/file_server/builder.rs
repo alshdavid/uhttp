@@ -172,7 +172,7 @@ impl FileServerBuilder {
   }
 
   #[cfg(feature = "file_server_transpile")]
-  /// JIT-transpile TypeScript sources on request.
+  /// JIT-transpile TypeScript and SCSS sources on request.
   ///
   /// Requires the `file_server_transpile` feature.
   pub fn transpile(

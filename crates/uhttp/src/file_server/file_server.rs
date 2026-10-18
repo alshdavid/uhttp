@@ -26,12 +26,6 @@ use super::resolver::FileServerResolver;
 use super::resolver::FileServerResolverOptions;
 #[cfg(feature = "file_server_transpile")]
 use super::transpile::typescript;
-#[cfg(feature = "file_server_transpile")]
-use super::transpile::typescript::helpers;
-#[cfg(feature = "file_server_transpile")]
-use super::transpile::typescript::javascript;
-#[cfg(feature = "file_server_transpile")]
-use super::transpile::typescript::tsconfig::TsConfigCache;
 use crate::HandleFunc;
 use crate::Request;
 use crate::Response;
@@ -122,33 +116,6 @@ fn transpile_target(path: &Path) -> Option<(TranspileTarget, &'static str)> {
     Some("sass") => Some((TranspileTarget::StyleSheet, "sass")),
     _ => None,
   }
-}
-
-#[cfg(feature = "file_server_transpile")]
-async fn transpile_typescript(
-  file_system: &Arc<dyn AsyncFileSystem>,
-  root_dir: &Path,
-  tsconfig_cache: &TsConfigCache,
-  file_path: &Path,
-  source_url: &str,
-  kind: &str,
-  source_maps: bool,
-  optimize: typescript::OptimizeOptions,
-) -> Option<typescript::TransformerResult> {
-  let content = file_system.read(file_path).await.ok()?;
-
-  let tsconfig = tsconfig_cache.resolve(file_path, root_dir);
-
-  typescript::transpile(typescript::TransformerContext {
-    content,
-    path: file_path.to_path_buf(),
-    source_url: source_url.to_string(),
-    source_maps,
-    kind: kind.to_string(),
-    tsconfig,
-    optimize,
-  })
-  .ok()
 }
 
 /// The transpiled response a request maps to.
@@ -299,7 +266,10 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
   }));
 
   #[cfg(feature = "file_server_transpile")]
-  let tsconfig_cache = Arc::new(TsConfigCache::new());
+  let worker_threads: usize = options
+    .transpile
+    .and_then(|options| options.worker_threads)
+    .unwrap_or(std::thread::available_parallelism()?.into());
 
   #[cfg(feature = "file_server_transpile")]
   let scss_transformer = Arc::new(super::transpile::scss::ScssTransformer::new(
@@ -312,13 +282,18 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
       },
       None => grass::OutputStyle::Expanded,
     },
-    match &options.transpile {
-      Some(options) => match options.worker_threads {
-        Some(worker_threads) => worker_threads,
-        None => std::thread::available_parallelism()?.into(),
-      },
-      None => std::thread::available_parallelism()?.into(),
+    worker_threads,
+  ));
+
+  #[cfg(feature = "file_server_transpile")]
+  let typescript_transformer = Arc::new(typescript::TypeScriptTransformer::new(
+    &options.file_system,
+    &options.root_dir,
+    match options.transpile {
+      Some(options) => options.typescript_optimize(),
+      None => Default::default(),
     },
+    worker_threads,
   ));
 
   Ok(Box::new(move |req, mut res| {
@@ -328,9 +303,9 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
     let encoding_resolver = Arc::clone(&encoding_resolver);
     let fallback = Arc::clone(&fallback);
     #[cfg(feature = "file_server_transpile")]
-    let tsconfig_cache = Arc::clone(&tsconfig_cache);
-    #[cfg(feature = "file_server_transpile")]
     let scss_transformer = Arc::clone(&scss_transformer);
+    #[cfg(feature = "file_server_transpile")]
+    let typescript_transformer = Arc::clone(&typescript_transformer);
 
     Box::pin(async move {
       // The encoding is needed by the transpile path as well as the static
@@ -344,14 +319,16 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
       // synthesised rather than read from disk, so they are served before the
       // request is resolved.
       #[cfg(feature = "file_server_transpile")]
-      if let Some(transpile_options) = options.transpile
-        && let Some(name) = helpers::module_name(req.uri.path())
-        && let Some(source) = helpers::module_source(name)
+      if options.transpile.is_some()
+        && let Some(name) = typescript::TypeScriptTransformer::helper_module_name(req.uri.path())
+        && let Some(source) = typescript::TypeScriptTransformer::helper_module_source(name)
       {
         // The helpers are ordinary JavaScript, so they are optimised directly
         // rather than transpiled. A helper that fails to optimise is served
         // as-is.
-        let source = javascript::optimize_module(&source, transpile_options.typescript_optimize())
+        let source = typescript_transformer
+          .optimize_module(&source)
+          .await
           .unwrap_or(source);
 
         let cache_key = (PathBuf::from(req.uri.path()), encoding);
@@ -387,9 +364,9 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
         Err(e) => return Err(e.into()),
       };
 
-      // JIT transpile TypeScript sources. The request names the source file
-      // directly; the transpiled module is served from memory and requests for
-      // a sibling `.js` file are never resolved to it here.
+      // JIT transpile TypeScript and SCSS sources. The request names the source
+      // file directly; the transpiled module is served from memory and requests
+      // for a sibling `.js` file are never resolved to it here.
       #[cfg(feature = "file_server_transpile")]
       if let Some(transpile_options) = options.transpile {
         let request_path = req.uri.path();
@@ -460,42 +437,39 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
             TranspileTarget::TypeScript => {
               let source_maps = !matches!(transpile_options.source_maps, SourceMapMode::Disabled);
 
-              transpile_typescript(
-                &options.file_system,
-                &options.root_dir,
-                &tsconfig_cache,
-                &transpile_request.source_file_path,
-                &transpile_request.source_url,
-                transpile_request.kind,
-                source_maps,
-                transpile_options.typescript_optimize(),
-              )
-              .await
-              .and_then(|result| {
-                if transpile_request.source_map {
-                  return result.map;
-                }
-
-                Some(match (transpile_options.source_maps, result.map) {
-                  // Inlined so the response stays a single, self-contained request.
-                  (SourceMapMode::Inline, Some(map)) => format!(
-                    "{}\n//# sourceMappingURL=data:application/json;base64,{}\n",
-                    result.code,
-                    base64::engine::general_purpose::STANDARD.encode(map.as_bytes()),
-                  ),
-                  // Linked so the browser fetches the `.map` sibling separately.
-                  (SourceMapMode::Linked, Some(_)) => {
-                    let map_name = transpile_request
-                      .source_file_path
-                      .file_name()
-                      .and_then(|name| name.to_str())
-                      .unwrap_or_default();
-
-                    format!("{}\n//# sourceMappingURL={}.map\n", result.code, map_name)
+              typescript_transformer
+                .transpile(
+                  &transpile_request.source_file_path,
+                  &transpile_request.source_url,
+                  transpile_request.kind,
+                  source_maps,
+                )
+                .await?
+                .and_then(|result| {
+                  if transpile_request.source_map {
+                    return result.map;
                   }
-                  _ => result.code,
+
+                  Some(match (transpile_options.source_maps, result.map) {
+                    // Inlined so the response stays a single, self-contained request.
+                    (SourceMapMode::Inline, Some(map)) => format!(
+                      "{}\n//# sourceMappingURL=data:application/json;base64,{}\n",
+                      result.code,
+                      base64::engine::general_purpose::STANDARD.encode(map.as_bytes()),
+                    ),
+                    // Linked so the browser fetches the `.map` sibling separately.
+                    (SourceMapMode::Linked, Some(_)) => {
+                      let map_name = transpile_request
+                        .source_file_path
+                        .file_name()
+                        .and_then(|name| name.to_str())
+                        .unwrap_or_default();
+
+                      format!("{}\n//# sourceMappingURL={}.map\n", result.code, map_name)
+                    }
+                    _ => result.code,
+                  })
                 })
-              })
             }
             TranspileTarget::StyleSheet => Some(
               scss_transformer

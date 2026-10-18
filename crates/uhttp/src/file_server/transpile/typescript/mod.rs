@@ -1,11 +1,12 @@
 use std::path::PathBuf;
 
-pub mod helpers;
-pub mod javascript;
+mod helpers;
+mod javascript;
+mod transformer;
 mod transpile;
-pub mod tsconfig;
+mod tsconfig;
 
-pub use transpile::transpile;
+pub use transformer::TypeScriptTransformer;
 
 #[derive(Debug)]
 pub struct TransformerResult {
@@ -33,7 +34,7 @@ impl OptimizeOptions {
   }
 }
 
-pub struct TransformerContext {
+struct TransformerContext {
   /// The bytes of the input file
   pub content: Vec<u8>,
   /// Path to the source file

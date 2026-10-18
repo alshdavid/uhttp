@@ -1,3 +1,5 @@
+use std::io;
+
 use swc_core::common::FileName;
 use swc_core::common::GLOBALS;
 use swc_core::common::Globals;
@@ -151,7 +153,7 @@ impl SourceMapGenConfig for SourceMapConfig {
   }
 }
 
-pub fn transpile(ctx: TransformerContext) -> anyhow::Result<TransformerResult> {
+pub fn transpile(ctx: TransformerContext) -> crate::Result<TransformerResult> {
   let jsx_config = jsx_config_from_tsconfig(&ctx);
 
   let source = String::from_utf8(ctx.content)?;
@@ -159,9 +161,7 @@ pub fn transpile(ctx: TransformerContext) -> anyhow::Result<TransformerResult> {
   let is_tsx = match ctx.kind.as_str() {
     "ts" => false,
     "tsx" => true,
-    _ => {
-      anyhow::bail!("Got an invalid file type");
-    }
+    _ => return Err(io::Error::other("Got an invalid file type").into()),
   };
 
   let cm: Lrc<SourceMap> = Default::default();
@@ -179,14 +179,17 @@ pub fn transpile(ctx: TransformerContext) -> anyhow::Result<TransformerResult> {
         let looks_like_jsx =
           source.contains("</") || source.contains("/>") || source.contains("<>");
         if looks_like_jsx && parse(&fm, &comments, true).is_ok() {
-          anyhow::bail!(
-            "JSX syntax detected in a .ts file: {}. Rename the file to .tsx or remove JSX.",
-            ctx.path.display()
+          return Err(
+            io::Error::other(format!(
+              "JSX syntax detected in a .ts file: {}. Rename the file to .tsx or remove JSX.",
+              ctx.path.display()
+            ))
+            .into(),
           );
         }
       }
 
-      anyhow::bail!("Parse errors: {}", errors.join(", "));
+      return Err(io::Error::other(format!("Parse errors: {}", errors.join(", "))).into());
     }
   };
 
@@ -199,7 +202,7 @@ pub fn transpile(ctx: TransformerContext) -> anyhow::Result<TransformerResult> {
   let (code, map) = GLOBALS.set(&globals, || {
     HELPERS.set(
       &Helpers::new(external_helpers),
-      || -> anyhow::Result<(String, Option<String>)> {
+      || -> crate::Result<(String, Option<String>)> {
         let unresolved_mark = Mark::new();
         let top_level_mark = Mark::new();
 

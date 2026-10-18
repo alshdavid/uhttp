@@ -3,8 +3,6 @@
     curl http://localhost:8080
 */
 
-use std::path::PathBuf;
-
 use include_dir::Dir;
 use include_dir::include_dir;
 use uhttp::Server;
@@ -17,15 +15,12 @@ static STATIC_DIR: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/static");
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-  // Change this to the directory where the files live
-  let static_files_dir: PathBuf = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("static");
-
   Server::builder()
     .handler(
       FileServer::builder()
-        .root_dir(static_files_dir)
-        .compress(true)
         .file_system(AsyncIncludeDirFileSystem::new(STATIC_DIR.clone()))
+        .root_dir("/")
+        .compress(true)
         .implicit_extensions(true)
         .cache(Default::default())
         .transpile(TranspileOptions {

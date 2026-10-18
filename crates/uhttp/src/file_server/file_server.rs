@@ -67,7 +67,7 @@ pub enum SourceMapMode {
 }
 
 #[cfg(feature = "file_server_transpile")]
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TranspileOptions {
   /// How source maps are supplied
   pub source_maps: SourceMapMode,
@@ -77,8 +77,8 @@ pub struct TranspileOptions {
   pub mangle: bool,
   /// Apply size reducing transforms to the syntax tree
   pub compress: bool,
-  /// Defaults to [`std::thread::available_parallelism`] when `None`.
-  pub worker_threads: Option<usize>,
+  /// Number of worker threads the transpilers run on
+  pub worker_threads: usize,
 }
 
 #[cfg(feature = "file_server_transpile")]
@@ -257,10 +257,9 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
   }));
 
   #[cfg(feature = "file_server_transpile")]
-  let worker_threads: usize = options
+  let worker_threads = options
     .transpile
-    .and_then(|options| options.worker_threads)
-    .unwrap_or(std::thread::available_parallelism()?.into());
+    .map_or(1, |options| options.worker_threads);
 
   #[cfg(feature = "file_server_transpile")]
   let scss_transformer = Arc::new(super::transpile::scss::ScssTransformer::new(

@@ -66,7 +66,7 @@ impl TranspileOptionsBuilder {
     self
   }
 
-  /// Number of transpiler worker threads. Defaults to
+  /// Number of worker threads the transpilers run on. Defaults to
   /// [`std::thread::available_parallelism`].
   pub fn worker_threads(
     mut self,
@@ -83,7 +83,13 @@ impl TranspileOptionsBuilder {
       minify: self.minify,
       mangle: self.mangle,
       compress: self.compress,
-      worker_threads: self.worker_threads,
+      worker_threads: self.worker_threads.unwrap_or_else(default_worker_threads),
     }
   }
+}
+
+fn default_worker_threads() -> usize {
+  std::thread::available_parallelism()
+    .map(usize::from)
+    .unwrap_or(1)
 }

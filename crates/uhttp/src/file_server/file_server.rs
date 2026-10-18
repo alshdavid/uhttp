@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+#[cfg(feature = "file_server_transpile")]
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -77,7 +79,7 @@ pub struct TranspileOptions {
 /// TypeScript extensions that are JIT transpiled, mapped to the syntax the
 /// source is parsed as.
 #[cfg(feature = "file_server_transpile")]
-fn transpile_kind(path: &std::path::Path) -> Option<&'static str> {
+fn transpile_kind(path: &Path) -> Option<&'static str> {
   match path.extension().and_then(|extension| extension.to_str()) {
     Some("ts" | "mts" | "cts") => Some("ts"),
     Some("tsx") => Some("tsx"),
@@ -289,28 +291,28 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
       // a sibling `.js` file are never resolved to it here.
       #[cfg(feature = "file_server_transpile")]
       if let Some(transpile_options) = options.transpile {
-        // Resolve the request to a transpiled response without running the
-        // transpiler, so a cached response can be replayed without the work.
+        let request_path = req.uri.path();
+
+        // Map the request to a transpiled response from its URL alone, without
+        // running the transpiler or touching the filesystem, so a cached entry
+        // can be replayed even once the source is gone from disk.
         //
         // A linked source map is requested as the `.map` sibling of a source
-        // file (e.g. `/main.tsx.map`). The `.map` file does not exist, so the
-        // resolver reports it as missing; the map is produced on demand from
-        // the source it names. A real `.map` file is served untouched.
-        let transpile_request = if let Some(resolved) = resolved.as_ref() {
-          transpile_kind(&resolved.path).map(|_| TranspileRequest {
+        // file (e.g. `/main.tsx.map`).
+        let transpile_request = if transpile_kind(Path::new(request_path)).is_some() {
+          Some(TranspileRequest {
             mime_type: JAVASCRIPT_CONTENT_TYPE,
-            source_file_path: resolved.path.clone(),
-            source_url: req.uri.path().to_string(),
+            source_file_path: options.root_dir.join(request_path.trim_start_matches('/')),
+            source_url: request_path.to_string(),
             source_map: false,
           })
         } else if transpile_options.source_maps == SourceMapMode::Linked
-          && let Some(source_path) = req.uri.path().strip_suffix(".map")
+          && let Some(source_path) = request_path.strip_suffix(".map")
+          && transpile_kind(Path::new(source_path)).is_some()
         {
-          let source_file_path = options.root_dir.join(source_path.trim_start_matches('/'));
-
-          transpile_kind(&source_file_path).map(|_| TranspileRequest {
+          Some(TranspileRequest {
             mime_type: SOURCE_MAP_CONTENT_TYPE,
-            source_file_path,
+            source_file_path: options.root_dir.join(source_path.trim_start_matches('/')),
             source_url: source_path.to_string(),
             source_map: true,
           })
@@ -323,13 +325,20 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
           // its `.map` sibling do not share an entry. A request that fails to
           // transpile falls through to the static path below, which keys by
           // resolved path, so the two never collide.
-          let cache_key = (PathBuf::from(req.uri.path()), encoding);
+          let cache_key = (PathBuf::from(request_path), encoding);
 
+          // A cached response is replayed regardless of whether the source
+          // still exists on disk: a deleted or edited source keeps serving the
+          // last rendered response until the entry is invalidated.
           if let Some(cache) = options.cache.as_ref()
             && let Some(cached) = cache.get(&cache_key)
           {
             return replay_cached(&req, res, &options, cached);
           }
+
+          // A real source map on disk takes precedence over one generated from
+          // the source.
+          let shadowed_by_disk = transpile_request.source_map && resolved.is_some();
 
           // Captured before rendering so a response rendered against an older
           // generation cannot repopulate a cleared cache.
@@ -338,13 +347,14 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
             .as_ref()
             .map(|cache| (Arc::clone(cache), cache_key.clone(), cache.generation()));
 
-          if let Some(result) = transpile_source(
-            &options,
-            &tsconfig_cache,
-            &transpile_request.source_file_path,
-            &transpile_request.source_url,
-          )
-          .await
+          if !shadowed_by_disk
+            && let Some(result) = transpile_source(
+              &options,
+              &tsconfig_cache,
+              &transpile_request.source_file_path,
+              &transpile_request.source_url,
+            )
+            .await
           {
             let content = if transpile_request.source_map {
               result.map

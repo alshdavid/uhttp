@@ -12,6 +12,11 @@ use swc_core::ecma::ast::Program;
 use swc_core::ecma::codegen::Config as CodegenConfig;
 use swc_core::ecma::codegen::Emitter;
 use swc_core::ecma::codegen::text_writer::JsWriter;
+use swc_core::ecma::minifier::optimize;
+use swc_core::ecma::minifier::option::CompressOptions;
+use swc_core::ecma::minifier::option::ExtraOptions;
+use swc_core::ecma::minifier::option::MangleOptions;
+use swc_core::ecma::minifier::option::MinifyOptions;
 use swc_core::ecma::parser::Parser;
 use swc_core::ecma::parser::StringInput;
 use swc_core::ecma::parser::Syntax;
@@ -256,20 +261,50 @@ pub fn transpile(ctx: TransformerContext) -> anyhow::Result<TransformerResult> {
 
         program = program.apply(inject_helpers(unresolved_mark));
         program = program.apply(hygiene());
-        program = program.apply(fixer(Some(&comments)));
 
         if external_helpers {
           rewrite_imports(&mut program);
         }
+
+        if ctx.optimize.is_enabled() {
+          program = optimize(
+            program,
+            cm.clone(),
+            Some(&comments),
+            None,
+            &MinifyOptions {
+              compress: ctx.optimize.compress.then(CompressOptions::default),
+              mangle: ctx.optimize.mangle.then(MangleOptions::default),
+              ..MinifyOptions::default()
+            },
+            &ExtraOptions {
+              unresolved_mark,
+              top_level_mark,
+              mangle_name_cache: None,
+            },
+          );
+        }
+
+        // Runs after the minifier: it drops the parentheses the fixer adds and
+        // can create expressions that need them, e.g. an object destructuring
+        // assignment opening a class static block.
+        program = program.apply(fixer(Some(&comments)));
+
+        let mut codegen_config = CodegenConfig::default();
+        codegen_config.minify = ctx.optimize.minify;
 
         let mut code = Vec::new();
         let mut mappings = ctx.source_maps.then(Vec::new);
 
         {
           let mut emitter = Emitter {
-            cfg: CodegenConfig::default(),
+            cfg: codegen_config,
             cm: cm.clone(),
-            comments: Some(&comments),
+            // Minifying drops the comments that the transform passes attach.
+            comments: match ctx.optimize.minify {
+              true => None,
+              false => Some(&comments),
+            },
             wr: JsWriter::new(cm.clone(), "\n", &mut code, mappings.as_mut()),
           };
 
@@ -300,4 +335,208 @@ pub fn transpile(ctx: TransformerContext) -> anyhow::Result<TransformerResult> {
   })?;
 
   Ok(TransformerResult { code, map })
+}
+
+#[cfg(test)]
+mod tests {
+  use std::path::PathBuf;
+
+  use super::*;
+  use crate::file_server::transpile::OptimizeOptions;
+
+  fn transpile_source(
+    source: &str,
+    optimize: OptimizeOptions,
+  ) -> String {
+    transpile(TransformerContext {
+      content: source.as_bytes().to_vec(),
+      path: PathBuf::from("/main.ts"),
+      source_url: "/main.ts".to_string(),
+      source_maps: false,
+      kind: "ts".to_string(),
+      root_dir: PathBuf::from("/"),
+      tsconfig: Default::default(),
+      optimize,
+    })
+    .expect("the fixture transpiles")
+    .code
+  }
+
+  /// A module with a comment, a local helper and a foldable expression.
+  const SOURCE: &str = r#"
+    // a leading comment
+    const double = (value: number): number => value * 2;
+
+    export const answer: number = double(21);
+  "#;
+
+  #[test]
+  fn leaves_the_output_readable_by_default() {
+    let code = transpile_source(SOURCE, OptimizeOptions::default());
+
+    assert!(code.contains("// a leading comment"), "{code}");
+    assert!(code.contains("const double"), "{code}");
+    assert!(code.contains('\n'), "{code}");
+  }
+
+  #[test]
+  fn minify_strips_whitespace_and_comments() {
+    let code = transpile_source(
+      SOURCE,
+      OptimizeOptions {
+        minify: true,
+        ..OptimizeOptions::default()
+      },
+    );
+
+    assert!(!code.contains("// a leading comment"), "{code}");
+    assert!(!code.contains('\n'), "{code}");
+    assert!(code.contains("const double"), "{code}");
+  }
+
+  #[test]
+  fn mangle_renames_local_identifiers() {
+    let code = transpile_source(
+      SOURCE,
+      OptimizeOptions {
+        minify: true,
+        mangle: true,
+        ..OptimizeOptions::default()
+      },
+    );
+
+    assert!(!code.contains("double"), "{code}");
+    assert!(code.contains("export"), "{code}");
+  }
+
+  #[test]
+  fn compress_reduces_the_output() {
+    let source = "const unused = 1; export const sum = () => 20 + 22;";
+
+    let plain = transpile_source(source, OptimizeOptions::default());
+    let compressed = transpile_source(
+      source,
+      OptimizeOptions {
+        minify: true,
+        compress: true,
+        ..OptimizeOptions::default()
+      },
+    );
+
+    assert!(compressed.len() < plain.len(), "{plain}\n{compressed}");
+    assert!(compressed.contains("42"), "{compressed}");
+  }
+
+  #[test]
+  fn optimising_still_produces_a_source_map() {
+    let result = transpile(TransformerContext {
+      content: SOURCE.as_bytes().to_vec(),
+      path: PathBuf::from("/main.ts"),
+      source_url: "/main.ts".to_string(),
+      source_maps: true,
+      kind: "ts".to_string(),
+      root_dir: PathBuf::from("/"),
+      tsconfig: Default::default(),
+      optimize: OptimizeOptions {
+        minify: true,
+        mangle: true,
+        compress: true,
+      },
+    })
+    .expect("the fixture transpiles");
+
+    assert!(result.map.is_some());
+  }
+
+  /// Every optimisation has to leave output a browser can execute. The
+  /// minifier rewrites expressions and drops parentheses, so the result has to
+  /// be re-parsed rather than inspected.
+  #[test]
+  fn optimised_output_parses() {
+    for optimize in [
+      OptimizeOptions {
+        minify: true,
+        ..OptimizeOptions::default()
+      },
+      OptimizeOptions {
+        mangle: true,
+        ..OptimizeOptions::default()
+      },
+      OptimizeOptions {
+        compress: true,
+        ..OptimizeOptions::default()
+      },
+      OptimizeOptions {
+        minify: true,
+        mangle: true,
+        compress: true,
+      },
+    ] {
+      for (kind, source) in [
+        ("ts", SOURCE),
+        // A decorated accessor, which the decorator transform turns into an
+        // object destructuring assignment inside a class static block.
+        ("ts", DECORATED_ACCESSOR),
+      ] {
+        let code = transpile(TransformerContext {
+          content: source.as_bytes().to_vec(),
+          path: PathBuf::from("/main.ts"),
+          source_url: "/main.ts".to_string(),
+          source_maps: false,
+          kind: kind.to_string(),
+          root_dir: PathBuf::from("/"),
+          tsconfig: Default::default(),
+          optimize,
+        })
+        .expect("the fixture transpiles")
+        .code;
+
+        assert!(
+          parse_javascript(&code).is_ok(),
+          "{optimize:?} produced code that does not parse:\n{code}"
+        );
+      }
+    }
+  }
+
+  /// The decorator transform emits `static { ({ e: [...] } = helper(...)) }`,
+  /// which is only valid while parenthesised.
+  const DECORATED_ACCESSOR: &str = r#"
+    declare function decorate(value: unknown, context: unknown): void;
+
+    class Model {
+      @decorate accessor message = "";
+    }
+
+    export const model = new Model();
+  "#;
+
+  fn parse_javascript(source: &str) -> Result<(), String> {
+    use swc_core::common::FileName;
+    use swc_core::common::SourceMap;
+    use swc_core::common::sync::Lrc;
+    use swc_core::ecma::parser::Parser;
+    use swc_core::ecma::parser::StringInput;
+    use swc_core::ecma::parser::Syntax;
+    use swc_core::ecma::parser::lexer::Lexer;
+
+    let cm: Lrc<SourceMap> = Default::default();
+    let fm = cm.new_source_file(FileName::Anon.into(), source.to_string());
+
+    let lexer = Lexer::new(
+      Syntax::Es(Default::default()),
+      EsVersion::latest(),
+      StringInput::from(&*fm),
+      None,
+    );
+
+    let mut parser = Parser::new_from(lexer);
+    let program = parser.parse_program();
+
+    match program {
+      Ok(_) if parser.take_errors().is_empty() => Ok(()),
+      Ok(_) => Err("parser reported recoverable errors".to_string()),
+      Err(error) => Err(error.kind().msg().to_string()),
+    }
+  }
 }

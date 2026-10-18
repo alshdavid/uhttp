@@ -83,7 +83,10 @@ fn options(ctx: &TransformerContext) -> Options<'_> {
 
   Options::default()
     .fs(fs)
-    .style(OutputStyle::Expanded)
+    .style(match ctx.optimize.minify {
+      true => OutputStyle::Compressed,
+      false => OutputStyle::Expanded,
+    })
     .load_path(ctx.path.parent().unwrap_or(Path::new(".")))
 }
 
@@ -258,6 +261,7 @@ mod tests {
       kind: "scss".to_string(),
       root_dir: dir,
       tsconfig: Default::default(),
+      optimize: Default::default(),
     });
 
     assert!(
@@ -294,6 +298,7 @@ mod tests {
         kind: "scss".to_string(),
         root_dir: serve_dir,
         tsconfig: Default::default(),
+        optimize: Default::default(),
       })
       .is_err()
     );

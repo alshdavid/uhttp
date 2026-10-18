@@ -22,7 +22,10 @@ async fn main() -> anyhow::Result<()> {
         .compress(true)
         .implicit_extensions(true)
         .transpile(TranspileOptions {
-          source_maps: SourceMapMode::Inline,
+          source_maps: SourceMapMode::Linked,
+          minify: true,
+          mangle: true,
+          compress: true,
         })
         .build()?,
     )

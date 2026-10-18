@@ -25,11 +25,15 @@ use super::file_system::AsyncFileSystem;
 use super::resolver::FileServerResolver;
 use super::resolver::FileServerResolverOptions;
 #[cfg(feature = "file_server_transpile")]
+use super::transpile::OptimizeOptions;
+#[cfg(feature = "file_server_transpile")]
 use super::transpile::TransformerContext;
 #[cfg(feature = "file_server_transpile")]
 use super::transpile::TransformerResult;
 #[cfg(feature = "file_server_transpile")]
 use super::transpile::helpers;
+#[cfg(feature = "file_server_transpile")]
+use super::transpile::javascript;
 #[cfg(feature = "file_server_transpile")]
 use super::transpile::scss;
 #[cfg(feature = "file_server_transpile")]
@@ -84,7 +88,25 @@ pub enum SourceMapMode {
 #[cfg(feature = "file_server_transpile")]
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct TranspileOptions {
+  /// How source maps are supplied
   pub source_maps: SourceMapMode,
+  /// Strip whitespace and comments from the output
+  pub minify: bool,
+  /// Rename identifiers to shorter names
+  pub mangle: bool,
+  /// Apply size reducing transforms to the syntax tree
+  pub compress: bool,
+}
+
+#[cfg(feature = "file_server_transpile")]
+impl TranspileOptions {
+  fn optimize(&self) -> OptimizeOptions {
+    OptimizeOptions {
+      minify: self.minify,
+      mangle: self.mangle,
+      compress: self.compress,
+    }
+  }
 }
 
 /// The transpiler a request is handled by.
@@ -121,6 +143,7 @@ async fn transpile_source(
   source_url: &str,
   kind: &str,
   source_maps: bool,
+  optimize: OptimizeOptions,
 ) -> Option<TransformerResult> {
   let content = options.file_system.read(file_path).await.ok()?;
 
@@ -134,6 +157,7 @@ async fn transpile_source(
     kind: kind.to_string(),
     root_dir: options.root_dir.clone(),
     tsconfig,
+    optimize,
   })
   .ok()
 }
@@ -148,6 +172,7 @@ async fn transpile_stylesheet(
   file_path: &Path,
   source_url: &str,
   kind: &str,
+  optimize: OptimizeOptions,
 ) -> Option<String> {
   let content = options.file_system.read(file_path).await.ok()?;
 
@@ -159,6 +184,7 @@ async fn transpile_stylesheet(
     kind: kind.to_string(),
     root_dir: options.root_dir.clone(),
     tsconfig: tsconfig::TsConfig::defaults(),
+    optimize,
   })
   .ok()?;
 
@@ -343,10 +369,29 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
       // synthesised rather than read from disk, so they are served before the
       // request is resolved.
       #[cfg(feature = "file_server_transpile")]
-      if options.transpile.is_some()
+      if let Some(transpile_options) = options.transpile
         && let Some(name) = helpers::module_name(req.uri.path())
         && let Some(source) = helpers::module_source(name)
       {
+        // The helpers are ordinary JavaScript, so they are optimised directly
+        // rather than transpiled. A helper that fails to optimise is served
+        // as-is.
+        let source =
+          javascript::optimize_module(&source, transpile_options.optimize()).unwrap_or(source);
+
+        let cache_key = (PathBuf::from(req.uri.path()), encoding);
+
+        if let Some(cache) = options.cache.as_ref()
+          && let Some(cached) = cache.get(&cache_key)
+        {
+          return replay_cached(&req, res, &options, cached);
+        }
+
+        let cache_slot = options
+          .cache
+          .as_ref()
+          .map(|cache| (Arc::clone(cache), cache_key.clone(), cache.generation()));
+
         res = res.header(headers::CONTENT_TYPE, JAVASCRIPT_CONTENT_TYPE);
 
         if let Some(content_encoding) = encoding.header_value() {
@@ -357,7 +402,7 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
           encoding,
           source,
           JAVASCRIPT_CONTENT_TYPE,
-          None,
+          cache_slot,
         ));
       }
 
@@ -449,6 +494,7 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
                 &transpile_request.source_url,
                 transpile_request.kind,
                 source_maps,
+                transpile_options.optimize(),
               )
               .await
               .and_then(|result| {
@@ -483,6 +529,7 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
                 &transpile_request.source_file_path,
                 &transpile_request.source_url,
                 transpile_request.kind,
+                transpile_options.optimize(),
               )
               .await
             }

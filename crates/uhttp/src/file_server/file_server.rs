@@ -15,7 +15,7 @@ use super::etag::etag_file;
 use super::fallback_file::FallbackFile;
 use super::fallback_file::FallbackFileResolveOptions;
 use super::file_system::AsyncFileSystem;
-use super::mime::detect_mime;
+use super::mime::detect_mime_for_path;
 use super::resolver::ResolveImplicitExtensionOptions;
 use super::resolver::resolve_implicit_extension;
 use crate::HandleFunc;
@@ -97,7 +97,7 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
 
       let mut file = match options.file_system.open(&file_path).await {
         Ok(file) => {
-          mime_type.replace(detect_mime(&url_path));
+          mime_type.replace(detect_mime_for_path(&url_path));
           file
         }
         Err(_) => match options.file_system.open(&fallback.path).await {

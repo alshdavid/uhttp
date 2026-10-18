@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use http::StatusCode;
 use mime_guess::Mime;
 
-use super::mime::detect_mime;
+use super::mime::detect_mime_for_path;
 
 pub struct FallbackFileResolveOptions<'a> {
   pub root_dir: &'a Path,
@@ -30,7 +30,7 @@ impl FallbackFile {
       None => StatusCode::NOT_FOUND,
     };
 
-    let mime_type = detect_mime(&fallback_path);
+    let mime_type = detect_mime_for_path(&fallback_path);
 
     Self {
       path: fallback_path,

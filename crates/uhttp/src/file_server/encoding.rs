@@ -26,29 +26,36 @@ impl Encoding {
   }
 }
 
-pub(crate) fn negotiate_encoding(
-  req: &Request,
-  compress: bool,
-) -> Encoding {
-  if !compress {
-    return Encoding::Identity;
+pub(crate) struct EncodingResolver;
+
+impl EncodingResolver {
+  /// `compress` disabled has no resolver, so "don't compress" is represented as
+  /// `None` rather than a separate identity strategy.
+  pub(crate) fn new(compress: bool) -> Option<Self> {
+    compress.then_some(EncodingResolver)
   }
 
-  let Some(accept_encoding) = req.headers.get(headers::ACCEPT_ENCODING) else {
-    return Encoding::Identity;
-  };
+  /// Pick an encoding to respond with based on the request's `Accept-Encoding`
+  pub(crate) fn resolve(
+    &self,
+    req: &Request,
+  ) -> Encoding {
+    let Some(accept_encoding) = req.headers.get(headers::ACCEPT_ENCODING) else {
+      return Encoding::Identity;
+    };
 
-  let Ok(accept_encoding) = accept_encoding.to_str() else {
-    return Encoding::Identity;
-  };
+    let Ok(accept_encoding) = accept_encoding.to_str() else {
+      return Encoding::Identity;
+    };
 
-  if accept_encoding.contains("zstd") {
-    Encoding::Zstd
-  } else if accept_encoding.contains("br") {
-    Encoding::Brotli
-  } else if accept_encoding.contains("gz") {
-    Encoding::Gzip
-  } else {
-    Encoding::Identity
+    if accept_encoding.contains("zstd") {
+      Encoding::Zstd
+    } else if accept_encoding.contains("br") {
+      Encoding::Brotli
+    } else if accept_encoding.contains("gz") {
+      Encoding::Gzip
+    } else {
+      Encoding::Identity
+    }
   }
 }

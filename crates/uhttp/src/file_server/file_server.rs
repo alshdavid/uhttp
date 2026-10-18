@@ -8,7 +8,7 @@ use super::compression::brotli_stream;
 use super::compression::gzip_stream;
 use super::compression::zstd_stream;
 use super::encoding::Encoding;
-use super::encoding::negotiate_encoding;
+use super::encoding::EncodingResolver;
 use super::etag::EtagResolver;
 use super::fallback_file::FallbackFile;
 use super::fallback_file::FallbackFileResolveOptions;
@@ -69,6 +69,8 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
 
   let etag_resolver = Arc::new(EtagResolver::new(&options.etag));
 
+  let encoding_resolver = Arc::new(EncodingResolver::new(options.compress));
+
   let fallback = Arc::new(FallbackFile::resolve(FallbackFileResolveOptions {
     resolver: &resolver,
     fallback_route: &options.fallback_route,
@@ -79,6 +81,7 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
     let options = Arc::clone(&options);
     let resolver = Arc::clone(&resolver);
     let etag_resolver = Arc::clone(&etag_resolver);
+    let encoding_resolver = Arc::clone(&encoding_resolver);
     let fallback = Arc::clone(&fallback);
 
     Box::pin(async move {
@@ -111,7 +114,10 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
         res = res.header(headers::CONTENT_TYPE, mime_type.as_str());
       }
 
-      let encoding = negotiate_encoding(&req, options.compress);
+      let encoding = match encoding_resolver.as_ref() {
+        Some(resolver) => resolver.resolve(&req),
+        None => Encoding::Identity,
+      };
 
       if let Some(content_encoding) = encoding.header_value() {
         res = res.header(headers::CONTENT_ENCODING, content_encoding);

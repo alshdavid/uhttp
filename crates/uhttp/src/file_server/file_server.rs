@@ -82,26 +82,26 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
       let file_path = resolved.path;
 
       let mut status = StatusCode::OK;
-      let mut mime_type = Option::<String>::None;
-
-      for (key, value) in &options.custom_headers {
-        res = res.header(key.as_str(), value.as_str());
-      }
+      let mut mime_type = Option::<&String>::None;
 
       let mut file = match options.file_system.open(&file_path).await {
         Ok(file) => {
-          mime_type.replace(resolved.mime_type);
+          mime_type.replace(&resolved.mime_type);
           file
         }
         Err(_) => match options.file_system.open(&fallback.path).await {
           Ok(file) => {
             status = fallback.status;
-            mime_type.replace(fallback.mime_type.clone());
+            mime_type.replace(&fallback.mime_type);
             file
           }
           Err(_) => return res.status(StatusCode::NOT_FOUND).empty(),
         },
       };
+
+      for (key, value) in &options.custom_headers {
+        res = res.header(key.as_str(), value.as_str());
+      }
 
       if let Some(mime_type) = mime_type.as_ref() {
         res = res.header(headers::CONTENT_TYPE, mime_type.as_str());

@@ -68,6 +68,7 @@ pub enum SourceMapMode {
   #[default]
   Inline,
   Linked,
+  Disabled,
 }
 
 #[cfg(feature = "file_server_transpile")]
@@ -98,6 +99,7 @@ async fn transpile_source(
   tsconfig_cache: &TsConfigCache,
   file_path: &std::path::Path,
   source_url: &str,
+  source_maps: bool,
 ) -> Option<TransformerResult> {
   let kind = transpile_kind(file_path)?;
 
@@ -109,7 +111,7 @@ async fn transpile_source(
     content,
     path: file_path.to_path_buf(),
     source_url: source_url.to_string(),
-    source_maps: true,
+    source_maps,
     kind: kind.to_string(),
     root_dir: options.root_dir.clone(),
     tsconfig,
@@ -347,12 +349,15 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
             .as_ref()
             .map(|cache| (Arc::clone(cache), cache_key.clone(), cache.generation()));
 
+          let source_maps = !matches!(transpile_options.source_maps, SourceMapMode::Disabled);
+
           if !shadowed_by_disk
             && let Some(result) = transpile_source(
               &options,
               &tsconfig_cache,
               &transpile_request.source_file_path,
               &transpile_request.source_url,
+              source_maps,
             )
             .await
           {
@@ -376,7 +381,7 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
 
                   format!("{}\n//# sourceMappingURL={}.map\n", result.code, map_name)
                 }
-                (_, None) => result.code,
+                _ => result.code,
               })
             };
 

@@ -37,6 +37,14 @@ impl FileServerImplicitResolver {
 
     Ok(ResolveResult::from_path(path))
   }
+
+  pub fn resolve_exact(
+    &self,
+    specifier: &str,
+  ) -> ResolveResult {
+    let path = self.root_dir.join(specifier.trim_start_matches('/'));
+    ResolveResult::from_path(path)
+  }
 }
 
 pub struct ResolveImplicitExtensionOptions<'a> {

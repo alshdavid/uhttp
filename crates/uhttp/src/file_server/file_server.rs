@@ -2,8 +2,6 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use dyn_fs::ext::PathExt;
-use mime_guess::Mime;
 use tokio::io::AsyncWriteExt;
 
 use super::compression::brotli_stream;
@@ -15,9 +13,8 @@ use super::etag::etag_file;
 use super::fallback_file::FallbackFile;
 use super::fallback_file::FallbackFileResolveOptions;
 use super::file_system::AsyncFileSystem;
-use super::mime::detect_mime_for_path;
-use super::resolver::ResolveImplicitExtensionOptions;
-use super::resolver::resolve_implicit_extension;
+use super::resolver::FileServerResolver;
+use super::resolver::FileServerResolverOptions;
 use crate::HandleFunc;
 use crate::Request;
 use crate::ResponseBody;
@@ -63,33 +60,29 @@ pub struct FileServerOptions {
 pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
   let options = Arc::new(options);
 
-  let fallback = Arc::new(FallbackFile::resolve(FallbackFileResolveOptions {
+  let resolver = Arc::new(FileServerResolver::new(FileServerResolverOptions {
+    file_system: &options.file_system,
     root_dir: &options.root_dir,
+    implicit_extensions: options.implicit_extensions,
+  }));
+
+  let fallback = Arc::new(FallbackFile::resolve(FallbackFileResolveOptions {
+    resolver: &resolver,
     fallback_route: &options.fallback_route,
     fallback_status: &options.fallback_status,
   }));
 
   Ok(Box::new(move |req, mut res| {
     let options = Arc::clone(&options);
+    let resolver = Arc::clone(&resolver);
     let fallback = Arc::clone(&fallback);
 
     Box::pin(async move {
-      let url_path = match options.implicit_extensions {
-        true => {
-          resolve_implicit_extension(ResolveImplicitExtensionOptions {
-            fs: &*options.file_system,
-            root_dir: &options.root_dir,
-            input: req.uri.path(),
-          })
-          .await?
-        }
-        false => PathBuf::from(req.uri.path()),
-      };
-
-      let file_path = options.root_dir.join(&url_path);
+      let resolved = resolver.resolve(req.uri.path()).await?;
+      let file_path = resolved.path;
 
       let mut status = StatusCode::OK;
-      let mut mime_type = Option::<Mime>::None;
+      let mut mime_type = Option::<String>::None;
 
       for (key, value) in &options.custom_headers {
         res = res.header(key.as_str(), value.as_str());
@@ -97,7 +90,7 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
 
       let mut file = match options.file_system.open(&file_path).await {
         Ok(file) => {
-          mime_type.replace(detect_mime_for_path(&url_path));
+          mime_type.replace(resolved.mime_type);
           file
         }
         Err(_) => match options.file_system.open(&fallback.path).await {
@@ -111,7 +104,7 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
       };
 
       if let Some(mime_type) = mime_type.as_ref() {
-        res = res.header(headers::CONTENT_TYPE, mime_type.to_string());
+        res = res.header(headers::CONTENT_TYPE, mime_type.as_str());
       }
 
       let encoding = negotiate_encoding(&req, options.compress);

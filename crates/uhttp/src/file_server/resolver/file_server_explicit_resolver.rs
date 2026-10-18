@@ -12,11 +12,11 @@ impl FileServerExplicitResolver {
     Self { root_dir }
   }
 
-  pub async fn resolve(
+  pub fn resolve_exact(
     &self,
     specifier: &str,
-  ) -> io::Result<ResolveResult> {
+  ) -> ResolveResult {
     let path = self.root_dir.join(specifier.trim_start_matches('/'));
-    Ok(ResolveResult::from_path(path))
+    ResolveResult::from_path(path)
   }
 }

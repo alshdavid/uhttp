@@ -39,6 +39,14 @@ pub enum ETagStrategy {
   Disabled,
 }
 
+#[derive(Debug, Default)]
+pub enum TranspileMode {
+  Production,
+  Development,
+  #[default]
+  Disabled,
+}
+
 pub struct FileServerOptions {
   /// The filesystem files are read from
   pub file_system: Arc<dyn AsyncFileSystem>,
@@ -61,7 +69,7 @@ pub struct FileServerOptions {
   ///  `/foo` -> `/foo/index.html` | `/foo.html`
   pub implicit_extensions: bool,
   /// JIT Transpilation of TypeScript and SCSS sources
-  pub transpile: bool,
+  pub transpile: TranspileMode,
 }
 
 /// Serve files from the filesystem

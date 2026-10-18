@@ -7,6 +7,7 @@ use std::path::PathBuf;
 
 use uhttp::Server;
 use uhttp::file_server::FileServer;
+use uhttp::file_server::TranspileMode;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -18,7 +19,7 @@ async fn main() -> anyhow::Result<()> {
       FileServer::builder()
         .root_dir(static_files_dir)
         .compress(true)
-        .transpile(true)
+        .transpile(TranspileMode::Development)
         .build()?,
     )
     .listen("0.0.0.0:8080")

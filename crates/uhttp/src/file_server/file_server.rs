@@ -29,6 +29,10 @@ use super::transpile::TransformerContext;
 #[cfg(feature = "file_server_transpile")]
 use super::transpile::TransformerResult;
 #[cfg(feature = "file_server_transpile")]
+use super::transpile::scss;
+#[cfg(feature = "file_server_transpile")]
+use super::transpile::tsconfig;
+#[cfg(feature = "file_server_transpile")]
 use super::transpile::tsconfig::TsConfigCache;
 #[cfg(feature = "file_server_transpile")]
 use super::transpile::typescript;
@@ -50,6 +54,10 @@ const JAVASCRIPT_CONTENT_TYPE: &str = "application/javascript; charset=utf-8";
 /// Content type linked source maps are served with
 #[cfg(feature = "file_server_transpile")]
 const SOURCE_MAP_CONTENT_TYPE: &str = "application/json; charset=utf-8";
+
+/// Content type transpiled stylesheets are served with
+#[cfg(feature = "file_server_transpile")]
+const STYLESHEET_CONTENT_TYPE: &str = "text/css; charset=utf-8";
 
 #[derive(Debug, Default)]
 pub enum ETagStrategy {
@@ -77,32 +85,41 @@ pub struct TranspileOptions {
   pub source_maps: SourceMapMode,
 }
 
-/// TypeScript extensions that are JIT transpiled, mapped to the syntax the
-/// source is parsed as.
+/// The transpiler a request is handled by.
 #[cfg(feature = "file_server_transpile")]
-fn transpile_kind(path: &Path) -> Option<&'static str> {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TranspileTarget {
+  /// TypeScript, transpiled to JavaScript
+  TypeScript,
+  /// SCSS, transpiled to CSS
+  StyleSheet,
+}
+
+/// Extensions that are JIT transpiled, mapped to the transpiler that handles
+/// them and the syntax they are parsed as.
+#[cfg(feature = "file_server_transpile")]
+fn transpile_target(path: &Path) -> Option<(TranspileTarget, &'static str)> {
   match path.extension().and_then(|extension| extension.to_str()) {
-    Some("ts" | "mts" | "cts") => Some("ts"),
-    Some("tsx") => Some("tsx"),
+    Some("ts" | "mts" | "cts") => Some((TranspileTarget::TypeScript, "ts")),
+    Some("tsx") => Some((TranspileTarget::TypeScript, "tsx")),
+    Some("scss") => Some((TranspileTarget::StyleSheet, "scss")),
+    Some("sass") => Some((TranspileTarget::StyleSheet, "sass")),
     _ => None,
   }
 }
 
-/// Transpile a TypeScript source read through the configured file system,
-/// always producing a source map.
+/// Transpile a TypeScript source read through the configured file system.
 ///
-/// Returns `None` when the path is not a TypeScript source, when it cannot be
-/// read, or when it fails to parse.
+/// Returns `None` when the file cannot be read or when it fails to parse.
 #[cfg(feature = "file_server_transpile")]
 async fn transpile_source(
   options: &FileServerOptions,
   tsconfig_cache: &TsConfigCache,
-  file_path: &std::path::Path,
+  file_path: &Path,
   source_url: &str,
+  kind: &str,
   source_maps: bool,
 ) -> Option<TransformerResult> {
-  let kind = transpile_kind(file_path)?;
-
   let content = options.file_system.read(file_path).await.ok()?;
 
   let tsconfig = tsconfig_cache.resolve(file_path, &options.root_dir);
@@ -119,9 +136,47 @@ async fn transpile_source(
   .ok()
 }
 
+/// Transpile a stylesheet to CSS.
+///
+/// The browser only knows the `.scss` URL, so imports that name a stylesheet
+/// without its extension are rewritten to a path this server can serve.
+#[cfg(feature = "file_server_transpile")]
+async fn transpile_stylesheet(
+  options: &FileServerOptions,
+  file_path: &Path,
+  source_url: &str,
+  kind: &str,
+) -> Option<String> {
+  let content = options.file_system.read(file_path).await.ok()?;
+
+  let result = scss::transpile(TransformerContext {
+    content,
+    path: file_path.to_path_buf(),
+    source_url: source_url.to_string(),
+    source_maps: false,
+    kind: kind.to_string(),
+    root_dir: options.root_dir.clone(),
+    tsconfig: tsconfig::TsConfig::defaults(),
+  })
+  .ok()?;
+
+  let mut code = result.code;
+
+  for (specifier, replacement) in scss::candidates(&code, file_path, &options.root_dir) {
+    code = code.replace(&format!("\"{specifier}\""), &format!("\"{replacement}\""));
+    code = code.replace(&format!("'{specifier}'"), &format!("'{replacement}'"));
+  }
+
+  Some(code)
+}
+
 /// The transpiled response a request maps to.
 #[cfg(feature = "file_server_transpile")]
 struct TranspileRequest {
+  /// The transpiler that renders the response
+  target: TranspileTarget,
+  /// The syntax the source is parsed as
+  kind: &'static str,
   /// Value for the `Content-Type` header
   mime_type: &'static str,
   /// The source file to transpile
@@ -301,26 +356,35 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
         //
         // A linked source map is requested as the `.map` sibling of a source
         // file (e.g. `/main.tsx.map`).
-        let transpile_request = if transpile_kind(Path::new(request_path)).is_some() {
-          Some(TranspileRequest {
-            mime_type: JAVASCRIPT_CONTENT_TYPE,
-            source_file_path: options.root_dir.join(request_path.trim_start_matches('/')),
-            source_url: request_path.to_string(),
-            source_map: false,
-          })
-        } else if transpile_options.source_maps == SourceMapMode::Linked
-          && let Some(source_path) = request_path.strip_suffix(".map")
-          && transpile_kind(Path::new(source_path)).is_some()
-        {
-          Some(TranspileRequest {
-            mime_type: SOURCE_MAP_CONTENT_TYPE,
-            source_file_path: options.root_dir.join(source_path.trim_start_matches('/')),
-            source_url: source_path.to_string(),
-            source_map: true,
-          })
-        } else {
-          None
-        };
+        let transpile_request =
+          if let Some((target, kind)) = transpile_target(Path::new(request_path)) {
+            Some(TranspileRequest {
+              target,
+              kind,
+              mime_type: match target {
+                TranspileTarget::TypeScript => JAVASCRIPT_CONTENT_TYPE,
+                TranspileTarget::StyleSheet => STYLESHEET_CONTENT_TYPE,
+              },
+              source_file_path: options.root_dir.join(request_path.trim_start_matches('/')),
+              source_url: request_path.to_string(),
+              source_map: false,
+            })
+          } else if transpile_options.source_maps == SourceMapMode::Linked
+            && let Some(source_path) = request_path.strip_suffix(".map")
+            && let Some((TranspileTarget::TypeScript, kind)) =
+              transpile_target(Path::new(source_path))
+          {
+            Some(TranspileRequest {
+              target: TranspileTarget::TypeScript,
+              kind,
+              mime_type: SOURCE_MAP_CONTENT_TYPE,
+              source_file_path: options.root_dir.join(source_path.trim_start_matches('/')),
+              source_url: source_path.to_string(),
+              source_map: true,
+            })
+          } else {
+            None
+          };
 
         if let Some(transpile_request) = transpile_request {
           // Transpiled responses are keyed by the request path so a source and
@@ -349,60 +413,74 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
             .as_ref()
             .map(|cache| (Arc::clone(cache), cache_key.clone(), cache.generation()));
 
-          let source_maps = !matches!(transpile_options.source_maps, SourceMapMode::Disabled);
+          let content = match transpile_request.target {
+            TranspileTarget::TypeScript if shadowed_by_disk => None,
+            TranspileTarget::TypeScript => {
+              let source_maps = !matches!(transpile_options.source_maps, SourceMapMode::Disabled);
 
-          if !shadowed_by_disk
-            && let Some(result) = transpile_source(
-              &options,
-              &tsconfig_cache,
-              &transpile_request.source_file_path,
-              &transpile_request.source_url,
-              source_maps,
-            )
-            .await
-          {
-            let content = if transpile_request.source_map {
-              result.map
-            } else {
-              Some(match (transpile_options.source_maps, result.map) {
-                // Inlined so the response stays a single, self-contained request.
-                (SourceMapMode::Inline, Some(map)) => format!(
-                  "{}\n//# sourceMappingURL=data:application/json;base64,{}\n",
-                  result.code,
-                  base64::engine::general_purpose::STANDARD.encode(map.as_bytes()),
-                ),
-                // Linked so the browser fetches the `.map` sibling separately.
-                (SourceMapMode::Linked, Some(_)) => {
-                  let map_name = transpile_request
-                    .source_file_path
-                    .file_name()
-                    .and_then(|name| name.to_str())
-                    .unwrap_or_default();
-
-                  format!("{}\n//# sourceMappingURL={}.map\n", result.code, map_name)
+              transpile_source(
+                &options,
+                &tsconfig_cache,
+                &transpile_request.source_file_path,
+                &transpile_request.source_url,
+                transpile_request.kind,
+                source_maps,
+              )
+              .await
+              .and_then(|result| {
+                if transpile_request.source_map {
+                  return result.map;
                 }
-                _ => result.code,
+
+                Some(match (transpile_options.source_maps, result.map) {
+                  // Inlined so the response stays a single, self-contained request.
+                  (SourceMapMode::Inline, Some(map)) => format!(
+                    "{}\n//# sourceMappingURL=data:application/json;base64,{}\n",
+                    result.code,
+                    base64::engine::general_purpose::STANDARD.encode(map.as_bytes()),
+                  ),
+                  // Linked so the browser fetches the `.map` sibling separately.
+                  (SourceMapMode::Linked, Some(_)) => {
+                    let map_name = transpile_request
+                      .source_file_path
+                      .file_name()
+                      .and_then(|name| name.to_str())
+                      .unwrap_or_default();
+
+                    format!("{}\n//# sourceMappingURL={}.map\n", result.code, map_name)
+                  }
+                  _ => result.code,
+                })
               })
-            };
-
-            if let Some(content) = content {
-              for (key, value) in &options.custom_headers {
-                res = res.header(key.as_str(), value.as_str());
-              }
-
-              res = res.header(headers::CONTENT_TYPE, transpile_request.mime_type);
-
-              if let Some(content_encoding) = encoding.header_value() {
-                res = res.header(headers::CONTENT_ENCODING, content_encoding);
-              }
-
-              return res.status(StatusCode::OK).body(encode_body(
-                encoding,
-                content,
-                transpile_request.mime_type,
-                cache_slot,
-              ));
             }
+            TranspileTarget::StyleSheet => {
+              transpile_stylesheet(
+                &options,
+                &transpile_request.source_file_path,
+                &transpile_request.source_url,
+                transpile_request.kind,
+              )
+              .await
+            }
+          };
+
+          if let Some(content) = content {
+            for (key, value) in &options.custom_headers {
+              res = res.header(key.as_str(), value.as_str());
+            }
+
+            res = res.header(headers::CONTENT_TYPE, transpile_request.mime_type);
+
+            if let Some(content_encoding) = encoding.header_value() {
+              res = res.header(headers::CONTENT_ENCODING, content_encoding);
+            }
+
+            return res.status(StatusCode::OK).body(encode_body(
+              encoding,
+              content,
+              transpile_request.mime_type,
+              cache_slot,
+            ));
           }
         }
       }

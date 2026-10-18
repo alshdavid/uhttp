@@ -19,7 +19,7 @@ async fn main() -> anyhow::Result<()> {
       root_dir: static_files_dir,
       file_system: uhttp::file_server::TokioFileSystem::new(),
       compress: true,
-      implicit_extensions: true,
+      implicit_extensions: false,
       etag: ETagStrategy::LastModified,
       custom_headers: Default::default(),
       fallback_route: Default::default(),

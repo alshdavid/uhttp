@@ -21,7 +21,7 @@ pub fn detect_mime_for_path(path: &Path) -> Mime {
 pub fn detect_mime(extension: &str) -> Mime {
   let base_mime = match extension {
     "" => mime_guess::mime::APPLICATION_OCTET_STREAM,
-    extension => mime_guess::from_ext(&extension).first_or_octet_stream(),
+    extension => mime_guess::from_ext(extension).first_or_octet_stream(),
   };
 
   match is_textual(&base_mime) {

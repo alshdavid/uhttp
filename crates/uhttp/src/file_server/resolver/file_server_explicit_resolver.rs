@@ -1,4 +1,3 @@
-use std::io;
 use std::path::PathBuf;
 
 use super::file_server_resolver::ResolveResult;

@@ -19,6 +19,7 @@ use crate::HandleFunc;
 use crate::Request;
 use crate::ResponseBody;
 use crate::StatusCode;
+use crate::file_server::compression::uncompressed_stream;
 use crate::headers;
 
 /// Size of the buffer bodies are streamed through on their way to the client
@@ -129,15 +130,12 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
 
       let (body, mut writer) = ResponseBody::chunked(BODY_BUFFER_SIZE);
 
-      // The body is written after the response head has been handed back, so the
-      // copy has to outlive this future. A client hanging up mid transfer shows up
-      // as a write error here and there is no longer anywhere to report it to.
       tokio::task::spawn(async move {
         let _ = match encoding {
           Encoding::Zstd => zstd_stream(&mut file, &mut writer).await,
           Encoding::Brotli => brotli_stream(&mut file, &mut writer).await,
           Encoding::Gzip => gzip_stream(&mut file, &mut writer).await,
-          Encoding::Identity => tokio::io::copy(&mut file, &mut writer).await,
+          Encoding::Identity => uncompressed_stream(&mut file, &mut writer).await,
         };
         let _ = writer.shutdown().await;
       });

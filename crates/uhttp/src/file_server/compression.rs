@@ -2,7 +2,7 @@ use tokio::io::AsyncRead;
 use tokio::io::AsyncWrite;
 use tokio::io::BufReader;
 
-pub(crate) async fn gzip_stream<R, W>(
+pub async fn gzip_stream<R, W>(
   input: R,
   output: &mut W,
 ) -> Result<u64, std::io::Error>
@@ -15,7 +15,7 @@ where
   tokio::io::copy(&mut encoder, output).await
 }
 
-pub(crate) async fn brotli_stream<R, W>(
+pub async fn brotli_stream<R, W>(
   input: R,
   output: &mut W,
 ) -> Result<u64, std::io::Error>
@@ -28,7 +28,7 @@ where
   tokio::io::copy(&mut encoder, output).await
 }
 
-pub(crate) async fn zstd_stream<R, W>(
+pub async fn zstd_stream<R, W>(
   input: R,
   output: &mut W,
 ) -> Result<u64, std::io::Error>
@@ -39,4 +39,15 @@ where
   use async_compression::tokio::bufread::ZstdEncoder;
   let mut encoder = ZstdEncoder::new(BufReader::new(input));
   tokio::io::copy(&mut encoder, output).await
+}
+
+pub async fn uncompressed_stream<R, W>(
+  mut input: R,
+  output: &mut W,
+) -> Result<u64, std::io::Error>
+where
+  R: AsyncRead + Unpin,
+  W: AsyncWrite + Unpin,
+{
+  tokio::io::copy(&mut input, output).await
 }

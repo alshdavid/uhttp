@@ -9,7 +9,7 @@ use super::compression::gzip_stream;
 use super::compression::zstd_stream;
 use super::encoding::Encoding;
 use super::encoding::negotiate_encoding;
-use super::etag::etag_file;
+use super::etag::EtagResolver;
 use super::fallback_file::FallbackFile;
 use super::fallback_file::FallbackFileResolveOptions;
 use super::file_system::AsyncFileSystem;
@@ -66,6 +66,8 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
     implicit_extensions: options.implicit_extensions,
   }));
 
+  let etag_resolver = Arc::new(EtagResolver::new(&options.etag));
+
   let fallback = Arc::new(FallbackFile::resolve(FallbackFileResolveOptions {
     resolver: &resolver,
     fallback_route: &options.fallback_route,
@@ -75,6 +77,7 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
   Ok(Box::new(move |req, mut res| {
     let options = Arc::clone(&options);
     let resolver = Arc::clone(&resolver);
+    let etag_resolver = Arc::clone(&etag_resolver);
     let fallback = Arc::clone(&fallback);
 
     Box::pin(async move {
@@ -113,7 +116,11 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
         res = res.header(headers::CONTENT_ENCODING, content_encoding);
       }
 
-      if let Some(etag) = etag_file(&mut *file, &options.etag, encoding.etag_suffix()).await? {
+      if let Some(etag_resolver) = etag_resolver.as_ref()
+        && let Some(etag) = etag_resolver
+          .resolve(&mut *file, encoding.etag_suffix())
+          .await?
+      {
         if !has_modified(&req, &etag) {
           return res.status(StatusCode::NOT_MODIFIED).empty();
         }

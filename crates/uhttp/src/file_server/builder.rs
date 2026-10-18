@@ -50,6 +50,7 @@ pub struct FileServerBuilder {
   fallback_route: Option<String>,
   fallback_status: Option<StatusCode>,
   implicit_extensions: bool,
+  transpile: bool,
 }
 
 impl Default for FileServerBuilder {
@@ -64,6 +65,7 @@ impl Default for FileServerBuilder {
       fallback_route: None,
       fallback_status: None,
       implicit_extensions: false,
+      transpile: false,
     }
   }
 }
@@ -165,6 +167,15 @@ impl FileServerBuilder {
     self
   }
 
+  /// JIT-transpile TypeScript and SCSS sources on request. Defaults to `false`.
+  pub fn transpile(
+    mut self,
+    transpile: bool,
+  ) -> Self {
+    self.transpile = transpile;
+    self
+  }
+
   /// Construct the [`FileServer`] handler
   pub fn build(self) -> crate::Result<HandleFunc> {
     create(FileServerOptions {
@@ -177,6 +188,7 @@ impl FileServerBuilder {
       fallback_route: self.fallback_route,
       fallback_status: self.fallback_status,
       implicit_extensions: self.implicit_extensions,
+      transpile: self.transpile,
     })
   }
 }

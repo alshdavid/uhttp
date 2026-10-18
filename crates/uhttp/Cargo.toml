@@ -13,6 +13,13 @@ router = ["dep:percent-encoding", "dep:path-tree", "dep:base64"]
 websocket = ["dep:tokio-tungstenite"]
 file_server = ["dep:mime_guess", "dep:async-compression", "dep:dyn_fs"]
 file_server_include_dir = ["file_server", "dyn_fs/include_dir"]
+file_server_transpile = [
+  "file_server",
+  "dep:serde_json",
+  "dep:swc_core",
+  "dep:grass",
+  "dep:normalize-path",
+]
 
 [lints]
 workspace = true
@@ -65,3 +72,19 @@ serde_urlencoded = { workspace = true }
 
 # Optional dependency for the file server filesystem abstraction
 dyn_fs = { workspace = true, features = ["async"], optional = true }
+
+swc_core = { version = "82.0.2", features = [
+  "common",
+  "common_sourcemap",
+  "ecma_ast",
+  "ecma_codegen",
+  "ecma_helpers_inline",
+  "ecma_parser",
+  "ecma_parser_typescript",
+  "ecma_transforms",
+  "ecma_transforms_proposal",
+  "ecma_transforms_react",
+  "ecma_transforms_typescript",
+], optional = true }
+grass = { version = "0.13", default-features = false, optional = true }
+normalize-path = { version = "0.2.2", optional = true }

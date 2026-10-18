@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
+    "jsx": "react",
+    "jsxFactory": "h",
+    "jsxFragmentFactory": "Fragment"
+  },
+  "imports": {
+    "preact": "https://esm.sh/preact@11",
+    "preact/hooks": "https://esm.sh/preact@11/hooks",
+    "preact/jsx-runtime": "https://esm.sh/preact@11/jsx-runtime",
+    "preact/compat": "https://esm.sh/preact@11/compat",
+    "preact/devtools": "https://esm.sh/preact@11/devtools"
+  }
+}

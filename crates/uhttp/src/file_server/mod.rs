@@ -9,6 +9,7 @@ mod file_server;
 mod file_system;
 mod mime;
 mod resolver;
+mod transpile;
 
 pub use self::builder::*;
 pub use self::cache::CachedResponse;

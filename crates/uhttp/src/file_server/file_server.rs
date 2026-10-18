@@ -60,6 +60,8 @@ pub struct FileServerOptions {
   ///  `/`    -> `/index.html`
   ///  `/foo` -> `/foo/index.html` | `/foo.html`
   pub implicit_extensions: bool,
+  /// JIT Transpilation of TypeScript and SCSS sources
+  pub transpile: bool,
 }
 
 /// Serve files from the filesystem

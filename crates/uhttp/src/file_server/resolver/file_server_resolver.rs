@@ -42,6 +42,7 @@ impl FileServerResolver {
         options.root_dir.to_path_buf(),
       )),
       false => FileServerResolver::Explicit(FileServerExplicitResolver::new(
+        Arc::clone(options.file_system),
         options.root_dir.to_path_buf(),
       )),
     }
@@ -52,7 +53,7 @@ impl FileServerResolver {
     specifier: &str,
   ) -> io::Result<ResolveResult> {
     match self {
-      FileServerResolver::Explicit(resolver) => Ok(resolver.resolve_exact(specifier)),
+      FileServerResolver::Explicit(resolver) => resolver.resolve(specifier).await,
       FileServerResolver::Implicit(resolver) => resolver.resolve(specifier).await,
     }
   }

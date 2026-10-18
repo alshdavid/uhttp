@@ -125,8 +125,16 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
     let tsconfig_cache = Arc::clone(&tsconfig_cache);
 
     Box::pin(async move {
-      let resolved = resolver.resolve(req.uri.path()).await?;
-      let file_path = resolved.path;
+      let resolved = match resolver.resolve(req.uri.path()).await {
+        Ok(resolved) => Some(resolved),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(e) => return Err(e.into()),
+      };
+
+      let file_path = resolved
+        .as_ref()
+        .map(|resolved| resolved.path.clone())
+        .unwrap_or_else(|| fallback.path.clone());
 
       // JIT transpile TypeScript sources. The request names the source file
       // directly; the transpiled module is served from memory and requests for
@@ -182,11 +190,14 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
         None => Encoding::Identity,
       };
 
-      let cache_key = (file_path.clone(), encoding);
+      let cache_key = resolved
+        .as_ref()
+        .map(|resolved| (resolved.path.clone(), encoding));
 
       // Fast path: replay a fully rendered response from the cache.
       if let Some(cache) = options.cache.as_ref()
-        && let Some(cached) = cache.get(&cache_key)
+        && let Some(cache_key) = cache_key.as_ref()
+        && let Some(cached) = cache.get(cache_key)
       {
         for (key, value) in &options.custom_headers {
           res = res.header(key.as_str(), value.as_str());
@@ -219,12 +230,15 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
       let mut mime_type = Option::<&String>::None;
       let mut cacheable = true;
 
-      let mut file = match options.file_system.open(&file_path).await {
-        Ok(file) => {
+      let mut file = 'open: {
+        if let Some(resolved) = resolved.as_ref()
+          && let Ok(file) = options.file_system.open(&resolved.path).await
+        {
           mime_type.replace(&resolved.mime_type);
-          file
+          break 'open file;
         }
-        Err(_) => match options.file_system.open(&fallback.path).await {
+
+        match options.file_system.open(&fallback.path).await {
           Ok(file) => {
             status = fallback.status;
             mime_type.replace(&fallback.mime_type);
@@ -232,7 +246,7 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
             file
           }
           Err(_) => return res.status(StatusCode::NOT_FOUND).empty(),
-        },
+        }
       };
 
       for (key, value) in &options.custom_headers {
@@ -294,7 +308,9 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
         };
         let _ = tee.shutdown().await;
 
-        if let (Some((cache, generation)), Some(buffered)) = (cache_slot, tee.into_buffered()) {
+        if let (Some((cache, generation)), Some(buffered), Some(cache_key)) =
+          (cache_slot, tee.into_buffered(), cache_key)
+        {
           cache.set(
             cache_key,
             CachedResponse {

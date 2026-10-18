@@ -29,6 +29,8 @@ use super::transpile::TransformerContext;
 #[cfg(feature = "file_server_transpile")]
 use super::transpile::TransformerResult;
 #[cfg(feature = "file_server_transpile")]
+use super::transpile::helpers;
+#[cfg(feature = "file_server_transpile")]
 use super::transpile::scss;
 #[cfg(feature = "file_server_transpile")]
 use super::transpile::tsconfig;
@@ -330,17 +332,39 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
     let tsconfig_cache = Arc::clone(&tsconfig_cache);
 
     Box::pin(async move {
-      let resolved = match resolver.resolve(req.uri.path()).await {
-        Ok(resolved) => Some(resolved),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
-        Err(e) => return Err(e.into()),
-      };
-
       // The encoding is needed by the transpile path as well as the static
       // file path, so it is negotiated up front.
       let encoding = match encoding_resolver.as_ref() {
         Some(resolver) => resolver.resolve(&req),
         None => Encoding::Identity,
+      };
+
+      // swc shared helpers the transpiler emits imports for. They are
+      // synthesised rather than read from disk, so they are served before the
+      // request is resolved.
+      #[cfg(feature = "file_server_transpile")]
+      if options.transpile.is_some()
+        && let Some(name) = helpers::module_name(req.uri.path())
+        && let Some(source) = helpers::module_source(name)
+      {
+        res = res.header(headers::CONTENT_TYPE, JAVASCRIPT_CONTENT_TYPE);
+
+        if let Some(content_encoding) = encoding.header_value() {
+          res = res.header(headers::CONTENT_ENCODING, content_encoding);
+        }
+
+        return res.status(StatusCode::OK).body(encode_body(
+          encoding,
+          source,
+          JAVASCRIPT_CONTENT_TYPE,
+          None,
+        ));
+      }
+
+      let resolved = match resolver.resolve(req.uri.path()).await {
+        Ok(resolved) => Some(resolved),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(e) => return Err(e.into()),
       };
 
       // JIT transpile TypeScript sources. The request names the source file

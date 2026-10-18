@@ -1,8 +1,25 @@
-import { h, render, Fragment } from 'preact'
+import { h, render, Fragment, type TargetedInputEvent } from "preact";
+import { rx, useViewModel } from "rx";
 
-export const App = (props: { title: string }) => <Fragment>
-  <div>{window.location.href}</div>
-  <h1>{props.title}</h1>
-</Fragment>
+export class AppViewModel {
+  @rx accessor message = "";
+}
 
-render(<App title={"Hello World"} />, document.getElementById('root')!);
+export const App = (props: { title: string }) => {
+  const vm = useViewModel(AppViewModel, []);
+
+  return <Fragment>
+    <div>{window.location.href}</div>
+    <div>
+      <div>{vm.message}</div>
+      <input
+        onInput={(e: TargetedInputEvent<HTMLInputElement>) =>
+          (vm.message = e.currentTarget.value)
+        }
+        value={vm.message}
+      />
+    </div>
+  </Fragment>
+}
+
+render(<App />, document.getElementById('root')!);

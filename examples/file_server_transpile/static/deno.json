@@ -15,6 +15,7 @@
     "preact/hooks": "https://esm.sh/preact@11/hooks",
     "preact/jsx-runtime": "https://esm.sh/preact@11/jsx-runtime",
     "preact/compat": "https://esm.sh/preact@11/compat",
-    "preact/devtools": "https://esm.sh/preact@11/devtools"
+    "preact/devtools": "https://esm.sh/preact@11/devtools",
+    "rx": "https://esm.sh/@alshdavid/rx"
   }
 }

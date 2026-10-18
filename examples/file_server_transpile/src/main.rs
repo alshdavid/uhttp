@@ -7,6 +7,7 @@ use std::path::PathBuf;
 
 use uhttp::Server;
 use uhttp::file_server::FileServer;
+use uhttp::file_server::SourceMapMode;
 use uhttp::file_server::TranspileOptions;
 
 #[tokio::main]
@@ -20,7 +21,9 @@ async fn main() -> anyhow::Result<()> {
         .root_dir(static_files_dir)
         .compress(true)
         .implicit_extensions(true)
-        .transpile(TranspileOptions {})
+        .transpile(TranspileOptions {
+          source_maps: SourceMapMode::Inline,
+        })
         .build()?,
     )
     .listen("0.0.0.0:8080")

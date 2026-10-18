@@ -174,8 +174,7 @@ impl FileServerBuilder {
   #[cfg(feature = "file_server_transpile")]
   /// JIT-transpile TypeScript sources on request.
   ///
-  /// Requires the `file_server_transpile` feature. Defaults to
-  /// [`TranspileMode::Disabled`].
+  /// Requires the `file_server_transpile` feature.
   pub fn transpile(
     mut self,
     options: TranspileOptions,
@@ -196,6 +195,7 @@ impl FileServerBuilder {
       fallback_route: self.fallback_route,
       fallback_status: self.fallback_status,
       implicit_extensions: self.implicit_extensions,
+      #[cfg(feature = "file_server_transpile")]
       transpile: self.transpile,
     })
   }

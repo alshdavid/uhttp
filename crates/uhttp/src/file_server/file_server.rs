@@ -432,9 +432,7 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
 
         if let Some(transpile_request) = transpile_request {
           // Transpiled responses are keyed by the request path so a source and
-          // its `.map` sibling do not share an entry. A request that fails to
-          // transpile falls through to the static path below, which keys by
-          // resolved path, so the two never collide.
+          // its `.map` sibling do not share an entry.
           let cache_key = (PathBuf::from(request_path), encoding);
 
           // A cached response is replayed regardless of whether the source
@@ -499,19 +497,11 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
                 })
               })
             }
-            TranspileTarget::StyleSheet => match scss_transformer
-              .transpile(&transpile_request.source_file_path, transpile_request.kind)
-              .await
-            {
-              Ok(code) => Some(code),
-              Err(error) => {
-                eprintln!(
-                  "Failed to transpile {}: {error}",
-                  transpile_request.source_file_path.display()
-                );
-                None
-              }
-            },
+            TranspileTarget::StyleSheet => Some(
+              scss_transformer
+                .transpile(&transpile_request.source_file_path, transpile_request.kind)
+                .await?,
+            ),
           };
 
           if let Some(content) = content {

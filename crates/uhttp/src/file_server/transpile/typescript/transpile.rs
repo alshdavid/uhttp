@@ -341,8 +341,8 @@ pub fn transpile(ctx: TransformerContext) -> anyhow::Result<TransformerResult> {
 mod tests {
   use std::path::PathBuf;
 
+  use super::super::OptimizeOptions;
   use super::*;
-  use crate::file_server::transpile::OptimizeOptions;
 
   fn transpile_source(
     source: &str,
@@ -354,7 +354,6 @@ mod tests {
       source_url: "/main.ts".to_string(),
       source_maps: false,
       kind: "ts".to_string(),
-      root_dir: PathBuf::from("/"),
       tsconfig: Default::default(),
       optimize,
     })
@@ -435,7 +434,6 @@ mod tests {
       source_url: "/main.ts".to_string(),
       source_maps: true,
       kind: "ts".to_string(),
-      root_dir: PathBuf::from("/"),
       tsconfig: Default::default(),
       optimize: OptimizeOptions {
         minify: true,
@@ -484,7 +482,6 @@ mod tests {
           source_url: "/main.ts".to_string(),
           source_maps: false,
           kind: kind.to_string(),
-          root_dir: PathBuf::from("/"),
           tsconfig: Default::default(),
           optimize,
         })

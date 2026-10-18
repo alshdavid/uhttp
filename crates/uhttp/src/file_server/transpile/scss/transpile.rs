@@ -5,36 +5,36 @@ use grass::OutputStyle;
 use normalize_path::NormalizePath;
 
 use super::TransformerContext;
-use super::TransformerResult;
 
 /// Files a stylesheet can reference without naming the extension.
 const PARTIAL_EXTENSIONS: [&str; 2] = ["scss", "sass"];
 
 /// `grass` resolves imports against the process working directory and reports
-/// paths relative to it in error messages. Compilation runs on a blocking
-/// thread, so the chdir would be process-wide; instead imports are resolved
-/// through a file system that refuses to leave the served directory.
+/// paths relative to it in error messages. A chdir would be process-wide while
+/// other requests are in flight, so instead imports are resolved through a file
+/// system that refuses to leave the served directory.
+///
+/// Borrows the served directory: [`grass::Options`] holds a reference to the
+/// file system, so it only has to outlive the compile.
 #[derive(Debug)]
-struct ServeFs {
-  root: std::path::PathBuf,
+struct ServeFs<'a> {
+  root: &'a Path,
 }
 
-impl ServeFs {
-  fn new(root: &Path) -> Self {
-    Self {
-      root: root.to_path_buf(),
-    }
+impl<'a> ServeFs<'a> {
+  fn new(root: &'a Path) -> Self {
+    Self { root }
   }
 
   fn is_allowed(
     &self,
     path: &Path,
   ) -> bool {
-    path.normalize().starts_with(&self.root)
+    path.normalize().starts_with(self.root)
   }
 }
 
-impl grass::Fs for ServeFs {
+impl grass::Fs for ServeFs<'_> {
   fn is_dir(
     &self,
     path: &Path,
@@ -78,9 +78,10 @@ impl grass::Fs for ServeFs {
   }
 }
 
-fn options(ctx: &TransformerContext) -> Options<'_> {
-  let fs = Box::leak(Box::new(ServeFs::new(&ctx.root_dir)));
-
+fn options<'a>(
+  ctx: &TransformerContext,
+  fs: &'a dyn grass::Fs,
+) -> Options<'a> {
   Options::default()
     .fs(fs)
     .style(match ctx.optimize.minify {
@@ -90,13 +91,16 @@ fn options(ctx: &TransformerContext) -> Options<'_> {
     .load_path(ctx.path.parent().unwrap_or(Path::new(".")))
 }
 
-pub fn transpile(ctx: TransformerContext) -> anyhow::Result<TransformerResult> {
+pub fn transpile(ctx: TransformerContext) -> anyhow::Result<String> {
   let source_path = match ctx.kind() {
     "scss" | "sass" => ctx.path.clone(),
     _ => anyhow::bail!("Got an invalid file type"),
   };
 
-  let mut options = options(&ctx);
+  // Owned by the stack frame for the duration of the compile; the options only
+  // borrow it.
+  let fs = ServeFs::new(&ctx.root_dir);
+  let mut options = options(&ctx, &fs);
 
   if ctx.kind() == "sass" {
     options = options.input_syntax(grass::InputSyntax::Sass);
@@ -105,7 +109,7 @@ pub fn transpile(ctx: TransformerContext) -> anyhow::Result<TransformerResult> {
   let code =
     grass::from_path(&source_path, &options).map_err(|error| anyhow::anyhow!("{}", error))?;
 
-  Ok(TransformerResult { code, map: None })
+  Ok(code)
 }
 
 /// Resolve `@import`/`@use` references that name a stylesheet without its
@@ -254,13 +258,9 @@ mod tests {
     write(&dir.join("_theme.scss"), "$color: red;\n");
 
     let result = transpile(TransformerContext {
-      content: b"".to_vec(),
       path: entry,
-      source_url: "/main.scss".to_string(),
-      source_maps: false,
       kind: "scss".to_string(),
       root_dir: dir,
-      tsconfig: Default::default(),
       optimize: Default::default(),
     });
 
@@ -274,9 +274,9 @@ mod tests {
         .unwrap_or_default()
     );
 
-    let result = result.unwrap();
+    let code = result.unwrap();
 
-    assert!(result.code.contains("color: red"), "{}", result.code);
+    assert!(code.contains("color: red"), "{code}");
   }
 
   #[test]
@@ -291,17 +291,40 @@ mod tests {
 
     assert!(
       transpile(TransformerContext {
-        content: b"".to_vec(),
         path: entry,
-        source_url: "/main.scss".to_string(),
-        source_maps: false,
         kind: "scss".to_string(),
         root_dir: serve_dir,
-        tsconfig: Default::default(),
         optimize: Default::default(),
       })
       .is_err()
     );
+  }
+
+  #[test]
+  fn reuses_one_borrowed_file_system_across_compiles() {
+    let dir = temp_dir("borrowed");
+    let entry = dir.join("main.scss");
+    write(&entry, "@use 'theme';\na { color: theme.$color; }\n");
+    write(&dir.join("_theme.scss"), "$color: red;\n");
+
+    // The file system borrows the served directory for as long as the options
+    // that reference it. Nothing is required to be `'static`, so a single
+    // instance can serve any number of compiles without being leaked.
+    let fs = ServeFs::new(&dir);
+
+    for _ in 0..64 {
+      let ctx = TransformerContext {
+        path: entry.clone(),
+        kind: "scss".to_string(),
+        root_dir: dir.clone(),
+        optimize: Default::default(),
+      };
+
+      let options = options(&ctx, &fs);
+      let code = grass::from_path(&entry, &options).unwrap();
+
+      assert!(code.contains("color: red"), "{}", code);
+    }
   }
 
   #[test]

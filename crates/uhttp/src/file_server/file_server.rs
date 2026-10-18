@@ -25,23 +25,15 @@ use super::file_system::AsyncFileSystem;
 use super::resolver::FileServerResolver;
 use super::resolver::FileServerResolverOptions;
 #[cfg(feature = "file_server_transpile")]
-use super::transpile::OptimizeOptions;
-#[cfg(feature = "file_server_transpile")]
-use super::transpile::TransformerContext;
-#[cfg(feature = "file_server_transpile")]
-use super::transpile::TransformerResult;
-#[cfg(feature = "file_server_transpile")]
-use super::transpile::helpers;
-#[cfg(feature = "file_server_transpile")]
-use super::transpile::javascript;
-#[cfg(feature = "file_server_transpile")]
 use super::transpile::scss;
 #[cfg(feature = "file_server_transpile")]
-use super::transpile::tsconfig;
-#[cfg(feature = "file_server_transpile")]
-use super::transpile::tsconfig::TsConfigCache;
-#[cfg(feature = "file_server_transpile")]
 use super::transpile::typescript;
+#[cfg(feature = "file_server_transpile")]
+use super::transpile::typescript::helpers;
+#[cfg(feature = "file_server_transpile")]
+use super::transpile::typescript::javascript;
+#[cfg(feature = "file_server_transpile")]
+use super::transpile::typescript::tsconfig::TsConfigCache;
 use crate::HandleFunc;
 use crate::Request;
 use crate::Response;
@@ -100,11 +92,17 @@ pub struct TranspileOptions {
 
 #[cfg(feature = "file_server_transpile")]
 impl TranspileOptions {
-  fn optimize(&self) -> OptimizeOptions {
-    OptimizeOptions {
+  fn typescript_optimize(&self) -> typescript::OptimizeOptions {
+    typescript::OptimizeOptions {
       minify: self.minify,
       mangle: self.mangle,
       compress: self.compress,
+    }
+  }
+
+  fn scss_optimize(&self) -> scss::OptimizeOptions {
+    scss::OptimizeOptions {
+      minify: self.minify,
     }
   }
 }
@@ -132,65 +130,49 @@ fn transpile_target(path: &Path) -> Option<(TranspileTarget, &'static str)> {
   }
 }
 
-/// Transpile a TypeScript source read through the configured file system.
-///
-/// Returns `None` when the file cannot be read or when it fails to parse.
 #[cfg(feature = "file_server_transpile")]
-async fn transpile_source(
-  options: &FileServerOptions,
+async fn transpile_typescript(
+  file_system: &Arc<dyn AsyncFileSystem>,
+  root_dir: &Path,
   tsconfig_cache: &TsConfigCache,
   file_path: &Path,
   source_url: &str,
   kind: &str,
   source_maps: bool,
-  optimize: OptimizeOptions,
-) -> Option<TransformerResult> {
-  let content = options.file_system.read(file_path).await.ok()?;
+  optimize: typescript::OptimizeOptions,
+) -> Option<typescript::TransformerResult> {
+  let content = file_system.read(file_path).await.ok()?;
 
-  let tsconfig = tsconfig_cache.resolve(file_path, &options.root_dir);
+  let tsconfig = tsconfig_cache.resolve(file_path, root_dir);
 
-  typescript::transpile(TransformerContext {
+  typescript::transpile(typescript::TransformerContext {
     content,
     path: file_path.to_path_buf(),
     source_url: source_url.to_string(),
     source_maps,
     kind: kind.to_string(),
-    root_dir: options.root_dir.clone(),
     tsconfig,
     optimize,
   })
   .ok()
 }
 
-/// Transpile a stylesheet to CSS.
-///
-/// The browser only knows the `.scss` URL, so imports that name a stylesheet
-/// without its extension are rewritten to a path this server can serve.
 #[cfg(feature = "file_server_transpile")]
-async fn transpile_stylesheet(
-  options: &FileServerOptions,
+fn transpile_stylesheet(
+  root_dir: &Path,
   file_path: &Path,
-  source_url: &str,
   kind: &str,
-  optimize: OptimizeOptions,
+  optimize: scss::OptimizeOptions,
 ) -> Option<String> {
-  let content = options.file_system.read(file_path).await.ok()?;
-
-  let result = scss::transpile(TransformerContext {
-    content,
+  let mut code = scss::transpile(scss::TransformerContext {
     path: file_path.to_path_buf(),
-    source_url: source_url.to_string(),
-    source_maps: false,
     kind: kind.to_string(),
-    root_dir: options.root_dir.clone(),
-    tsconfig: tsconfig::TsConfig::defaults(),
+    root_dir: root_dir.to_path_buf(),
     optimize,
   })
   .ok()?;
 
-  let mut code = result.code;
-
-  for (specifier, replacement) in scss::candidates(&code, file_path, &options.root_dir) {
+  for (specifier, replacement) in scss::candidates(&code, file_path, root_dir) {
     code = code.replace(&format!("\"{specifier}\""), &format!("\"{replacement}\""));
     code = code.replace(&format!("'{specifier}'"), &format!("'{replacement}'"));
   }
@@ -376,8 +358,8 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
         // The helpers are ordinary JavaScript, so they are optimised directly
         // rather than transpiled. A helper that fails to optimise is served
         // as-is.
-        let source =
-          javascript::optimize_module(&source, transpile_options.optimize()).unwrap_or(source);
+        let source = javascript::optimize_module(&source, transpile_options.typescript_optimize())
+          .unwrap_or(source);
 
         let cache_key = (PathBuf::from(req.uri.path()), encoding);
 
@@ -487,14 +469,15 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
             TranspileTarget::TypeScript => {
               let source_maps = !matches!(transpile_options.source_maps, SourceMapMode::Disabled);
 
-              transpile_source(
-                &options,
+              transpile_typescript(
+                &options.file_system,
+                &options.root_dir,
                 &tsconfig_cache,
                 &transpile_request.source_file_path,
                 &transpile_request.source_url,
                 transpile_request.kind,
                 source_maps,
-                transpile_options.optimize(),
+                transpile_options.typescript_optimize(),
               )
               .await
               .and_then(|result| {
@@ -523,16 +506,12 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
                 })
               })
             }
-            TranspileTarget::StyleSheet => {
-              transpile_stylesheet(
-                &options,
-                &transpile_request.source_file_path,
-                &transpile_request.source_url,
-                transpile_request.kind,
-                transpile_options.optimize(),
-              )
-              .await
-            }
+            TranspileTarget::StyleSheet => transpile_stylesheet(
+              &options.root_dir,
+              &transpile_request.source_file_path,
+              transpile_request.kind,
+              transpile_options.scss_optimize(),
+            ),
           };
 
           if let Some(content) = content {

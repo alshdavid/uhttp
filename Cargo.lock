@@ -196,9 +196,9 @@ dependencies = [
 
 [[package]]
 name = "dyn_fs"
-version = "0.0.14"
+version = "0.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5694e6602d133e86c0bd471c7648fa047fdb171d0fd9d5c478b0547d1e691b76"
+checksum = "40bcd48649f0cf1f80c4d8d8d0a9210a3e44f8ff8722214971e5fef46a3cb50d"
 dependencies = [
  "include_dir",
  "tokio",
@@ -945,7 +945,6 @@ dependencies = [
  "http-body-util",
  "hyper",
  "hyper-util",
- "include_dir",
  "mime_guess",
  "path-tree",
  "percent-encoding",
@@ -1020,7 +1019,6 @@ name = "uhttp_example_file_server_include_dir"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "dyn_fs",
  "include_dir",
  "tokio",
  "uhttp",

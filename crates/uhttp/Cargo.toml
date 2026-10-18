@@ -12,6 +12,7 @@ json = ["dep:serde_json"]
 router = ["dep:percent-encoding", "dep:path-tree", "dep:base64"]
 websocket = ["dep:tokio-tungstenite"]
 file_server = ["dep:mime_guess", "dep:async-compression", "dep:dyn_fs"]
+file_server_include_dir = ["file_server", "dyn_fs/include_dir"]
 
 [lints]
 workspace = true
@@ -56,7 +57,6 @@ async-compression = { workspace = true, optional = true, features = [
 ] }
 
 # Optional dependencies for Static File Server (Embedded)
-include_dir = { workspace = true, optional = true }
 flate2 = { workspace = true, optional = true }
 brotli = { workspace = true, optional = true }
 

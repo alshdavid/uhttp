@@ -3,10 +3,10 @@
     curl http://localhost:8080
 */
 
-use dyn_fs::asynch::include_dir::AsyncIncludeDirFileSystem;
 use include_dir::Dir;
 use include_dir::include_dir;
 use uhttp::Server;
+use uhttp::file_server::AsyncIncludeDirFileSystem;
 use uhttp::file_server::FileServer;
 
 static STATIC_DIR: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/static");

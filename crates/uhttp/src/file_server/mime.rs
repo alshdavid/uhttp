@@ -1,22 +1,5 @@
-use std::path::Path;
-
-use dyn_fs::ext::PathExt;
 use mime_guess::Mime;
 use mime_guess::mime;
-
-pub fn detect_mime_for_path(path: &Path) -> Mime {
-  let base_mime = match path.try_extension() {
-    Ok(extension) => mime_guess::from_ext(&extension).first_or_octet_stream(),
-    Err(_) => mime_guess::mime::APPLICATION_OCTET_STREAM,
-  };
-
-  match is_textual(&base_mime) {
-    true => format!("{}; charset=utf-8", base_mime.essence_str())
-      .parse()
-      .unwrap_or(base_mime),
-    false => base_mime,
-  }
-}
 
 pub fn detect_mime(extension: &str) -> Mime {
   let base_mime = match extension {

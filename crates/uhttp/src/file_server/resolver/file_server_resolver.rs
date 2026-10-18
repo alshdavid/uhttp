@@ -12,7 +12,6 @@ use super::FileServerImplicitResolver;
 
 pub struct ResolveResult {
   pub path: PathBuf,
-  pub ext: String,
   pub mime_type: String,
 }
 
@@ -20,11 +19,7 @@ impl ResolveResult {
   pub(super) fn from_path(path: PathBuf) -> Self {
     let ext = path.try_extension().unwrap_or_default();
     let mime_type = detect_mime(&ext).to_string();
-    Self {
-      path,
-      ext,
-      mime_type,
-    }
+    Self { path, mime_type }
   }
 }
 

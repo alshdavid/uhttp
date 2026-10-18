@@ -7,8 +7,10 @@ edition = "2024"
 workspace = true
 
 [dependencies]
-uhttp = { path = "../../crates/uhttp", features = ["file_server"] }
+uhttp = { path = "../../crates/uhttp", features = [
+  "file_server",
+  "file_server_include_dir",
+] }
 tokio = { workspace = true, features = ["full"] }
 anyhow = { workspace = true }
 include_dir.workspace = true
-dyn_fs = { workspace = true, features = ["async", "include_dir"] }

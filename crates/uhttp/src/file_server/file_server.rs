@@ -25,8 +25,6 @@ use super::file_system::AsyncFileSystem;
 use super::resolver::FileServerResolver;
 use super::resolver::FileServerResolverOptions;
 #[cfg(feature = "file_server_transpile")]
-use super::transpile::scss;
-#[cfg(feature = "file_server_transpile")]
 use super::transpile::typescript;
 #[cfg(feature = "file_server_transpile")]
 use super::transpile::typescript::helpers;
@@ -99,12 +97,6 @@ impl TranspileOptions {
       compress: self.compress,
     }
   }
-
-  fn scss_optimize(&self) -> scss::OptimizeOptions {
-    scss::OptimizeOptions {
-      minify: self.minify,
-    }
-  }
 }
 
 /// The transpiler a request is handled by.
@@ -155,29 +147,6 @@ async fn transpile_typescript(
     optimize,
   })
   .ok()
-}
-
-#[cfg(feature = "file_server_transpile")]
-fn transpile_stylesheet(
-  root_dir: &Path,
-  file_path: &Path,
-  kind: &str,
-  optimize: scss::OptimizeOptions,
-) -> Option<String> {
-  let mut code = scss::transpile(scss::TransformerContext {
-    path: file_path.to_path_buf(),
-    kind: kind.to_string(),
-    root_dir: root_dir.to_path_buf(),
-    optimize,
-  })
-  .ok()?;
-
-  for (specifier, replacement) in scss::candidates(&code, file_path, root_dir) {
-    code = code.replace(&format!("\"{specifier}\""), &format!("\"{replacement}\""));
-    code = code.replace(&format!("'{specifier}'"), &format!("'{replacement}'"));
-  }
-
-  Some(code)
 }
 
 /// The transpiled response a request maps to.
@@ -330,6 +299,19 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
   #[cfg(feature = "file_server_transpile")]
   let tsconfig_cache = Arc::new(TsConfigCache::new());
 
+  #[cfg(feature = "file_server_transpile")]
+  let scss_transformer = Arc::new(super::transpile::scss::ScssTransformer::new(
+    &options.file_system,
+    &options.root_dir,
+    match options.transpile {
+      Some(options) => match options.minify {
+        true => grass::OutputStyle::Compressed,
+        false => grass::OutputStyle::Expanded,
+      },
+      None => grass::OutputStyle::Expanded,
+    },
+  )?);
+
   Ok(Box::new(move |req, mut res| {
     let options = Arc::clone(&options);
     let resolver = Arc::clone(&resolver);
@@ -338,6 +320,8 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
     let fallback = Arc::clone(&fallback);
     #[cfg(feature = "file_server_transpile")]
     let tsconfig_cache = Arc::clone(&tsconfig_cache);
+    #[cfg(feature = "file_server_transpile")]
+    let scss_transformer = Arc::clone(&scss_transformer);
 
     Box::pin(async move {
       // The encoding is needed by the transpile path as well as the static
@@ -506,12 +490,11 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
                 })
               })
             }
-            TranspileTarget::StyleSheet => transpile_stylesheet(
-              &options.root_dir,
-              &transpile_request.source_file_path,
-              transpile_request.kind,
-              transpile_options.scss_optimize(),
-            ),
+            TranspileTarget::StyleSheet => {
+              scss_transformer
+                .transpile(&transpile_request.source_file_path, transpile_request.kind)
+                .await
+            }
           };
 
           if let Some(content) = content {

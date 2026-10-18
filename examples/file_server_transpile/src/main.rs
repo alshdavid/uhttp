@@ -21,6 +21,7 @@ async fn main() -> anyhow::Result<()> {
         .root_dir(static_files_dir)
         .compress(true)
         .implicit_extensions(true)
+        .cache(Default::default())
         .transpile(TranspileOptions {
           source_maps: SourceMapMode::Linked,
           minify: true,

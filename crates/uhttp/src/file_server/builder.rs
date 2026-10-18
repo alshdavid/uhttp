@@ -10,7 +10,8 @@ use super::file_system::AsyncFileSystem;
 use super::file_system::TokioFileSystem;
 use crate::HandleFunc;
 use crate::StatusCode;
-use crate::file_server::TranspileMode;
+#[cfg(feature = "file_server_transpile")]
+use crate::file_server::TranspileOptions;
 
 /// Serve files from the filesystem.
 ///
@@ -51,7 +52,8 @@ pub struct FileServerBuilder {
   fallback_route: Option<String>,
   fallback_status: Option<StatusCode>,
   implicit_extensions: bool,
-  transpile: TranspileMode,
+  #[cfg(feature = "file_server_transpile")]
+  transpile: Option<TranspileOptions>,
 }
 
 impl Default for FileServerBuilder {
@@ -66,7 +68,8 @@ impl Default for FileServerBuilder {
       fallback_route: None,
       fallback_status: None,
       implicit_extensions: false,
-      transpile: TranspileMode::default(),
+      #[cfg(feature = "file_server_transpile")]
+      transpile: None,
     }
   }
 }
@@ -168,12 +171,16 @@ impl FileServerBuilder {
     self
   }
 
-  /// JIT-transpile TypeScript and SCSS sources on request. Defaults to `false`.
+  #[cfg(feature = "file_server_transpile")]
+  /// JIT-transpile TypeScript sources on request.
+  ///
+  /// Requires the `file_server_transpile` feature. Defaults to
+  /// [`TranspileMode::Disabled`].
   pub fn transpile(
     mut self,
-    transpile: TranspileMode,
+    options: TranspileOptions,
   ) -> Self {
-    self.transpile = transpile;
+    self.transpile = Some(options);
     self
   }
 

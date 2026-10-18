@@ -15,6 +15,7 @@ file_server = ["dep:mime_guess", "dep:async-compression", "dep:dyn_fs"]
 file_server_include_dir = ["file_server", "dyn_fs/include_dir"]
 file_server_transpile = [
   "file_server",
+  "dep:base64",
   "dep:serde_json",
   "dep:swc_core",
   "dep:grass",

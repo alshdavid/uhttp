@@ -9,6 +9,7 @@ mod file_server;
 mod file_system;
 mod mime;
 mod resolver;
+#[cfg(feature = "file_server_transpile")]
 mod transpile;
 
 pub use self::builder::*;

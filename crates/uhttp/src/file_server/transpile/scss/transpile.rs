@@ -1,6 +1,7 @@
 use std::io;
 use std::path::Path;
 
+use grass::Fs;
 use grass::Options;
 use grass::OutputStyle;
 use normalize_path::NormalizePath;
@@ -42,6 +43,7 @@ pub fn transpile(
 /// extension. The left hand side is the text as written, the right hand side
 /// the path to request in its place.
 pub fn candidates(
+  fs: &GrassFs,
   source: &str,
   source_path: &Path,
   root_dir: &Path,
@@ -50,7 +52,7 @@ pub fn candidates(
   let dir = source_path.parent().unwrap_or(Path::new("."));
 
   for specifier in specifiers(source) {
-    let Some(target) = find_in(dir, &specifier) else {
+    let Some(target) = find_in(fs, dir, &specifier) else {
       continue;
     };
 
@@ -73,6 +75,7 @@ pub fn candidates(
 /// Find the file a specifier names inside a single directory, preferring the
 /// partial form sass itself does, and stopping at one match per specifier.
 fn find_in(
+  fs: &GrassFs,
   dir: &Path,
   specifier: &str,
 ) -> Option<std::path::PathBuf> {
@@ -84,7 +87,7 @@ fn find_in(
 
   for candidate in [&path, &partial] {
     if candidate.extension().is_some() {
-      if candidate.is_file() {
+      if fs.is_file(candidate) {
         return Some(candidate.clone());
       }
 
@@ -94,7 +97,7 @@ fn find_in(
     for extension in PARTIAL_EXTENSIONS {
       let candidate = candidate.with_extension(extension);
 
-      if candidate.is_file() {
+      if fs.is_file(&candidate) {
         return Some(candidate);
       }
     }

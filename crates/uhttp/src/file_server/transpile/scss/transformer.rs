@@ -83,7 +83,7 @@ impl ScssTransformer {
                       };
 
                     for (specifier, replacement) in
-                      super::transpile::candidates(&code, &path, &root_dir)
+                      super::transpile::candidates(&fs, &code, &path, &root_dir)
                     {
                       code =
                         code.replace(&format!("\"{specifier}\""), &format!("\"{replacement}\""));

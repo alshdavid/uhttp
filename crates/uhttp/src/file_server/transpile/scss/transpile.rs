@@ -1,3 +1,4 @@
+use std::io;
 use std::path::Path;
 
 use grass::Options;
@@ -14,10 +15,12 @@ pub fn transpile(
   path: &Path,
   kind: &str,
   output_style: OutputStyle,
-) -> anyhow::Result<String> {
+) -> crate::Result<String> {
   let source_path = match kind {
     "scss" | "sass" => path,
-    _ => return Err(anyhow::anyhow!("Got an invalid file type")),
+    _ => {
+      return Err(io::Error::new(io::ErrorKind::InvalidInput, "Got an invalid file type").into());
+    }
   };
 
   let mut options = Options::default()
@@ -30,7 +33,7 @@ pub fn transpile(
   }
 
   let code =
-    grass::from_path(source_path, &options).map_err(|error| anyhow::anyhow!("{}", error))?;
+    grass::from_path(source_path, &options).map_err(|error| io::Error::other(error.to_string()))?;
 
   Ok(code)
 }

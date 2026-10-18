@@ -15,14 +15,14 @@ use super::fs::GrassFs;
 struct ScssTransformerEvent {
   path: PathBuf,
   kind: String,
-  tx: oneshot::Sender<anyhow::Result<String>>,
+  tx: oneshot::Sender<crate::Result<String>>,
 }
 
-/// The dedicated thread a [`ScssTransformer`] compiles on, along with the
-/// channel that feeds it.
+/// The worker threads a [`ScssTransformer`] compiles on, along with the channel
+/// that feeds them.
 struct ScssTransformerWorker {
   tx: Sender<ScssTransformerEvent>,
-  _handles: Vec<std::thread::JoinHandle<()>>,
+  _handles: Vec<JoinHandle<()>>,
 }
 
 pub struct ScssTransformer {
@@ -79,7 +79,7 @@ impl ScssTransformer {
                     let mut code =
                       match super::transpile::transpile(&fs, &path, &kind, output_style) {
                         Ok(code) => code,
-                        Err(error) => break 'block Err(anyhow::anyhow!("{}", error)),
+                        Err(error) => break 'block Err(error),
                       };
 
                     for (specifier, replacement) in
@@ -110,18 +110,21 @@ impl ScssTransformer {
     &self,
     path: &Path,
     kind: &str,
-  ) -> io::Result<String> {
+  ) -> crate::Result<String> {
     let (tx, rx) = oneshot::channel();
-    let _ = self.worker()?.tx.send(ScssTransformerEvent {
-      path: path.to_path_buf(),
-      kind: kind.to_string(),
-      tx,
-    });
+    self
+      .worker()?
+      .tx
+      .send(ScssTransformerEvent {
+        path: path.to_path_buf(),
+        kind: kind.to_string(),
+        tx,
+      })
+      .map_err(|_| io::Error::other("the SCSS transpiler is not running"))?;
 
     match rx.await {
-      Ok(Ok(code)) => Ok(code),
-      Ok(Err(error)) => Err(io::Error::other(error)),
-      Err(error) => Err(io::Error::other(error)),
+      Ok(result) => result,
+      Err(error) => Err(io::Error::other(error).into()),
     }
   }
 }

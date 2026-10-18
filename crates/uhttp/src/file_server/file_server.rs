@@ -499,10 +499,19 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
                 })
               })
             }
-            TranspileTarget::StyleSheet => scss_transformer
+            TranspileTarget::StyleSheet => match scss_transformer
               .transpile(&transpile_request.source_file_path, transpile_request.kind)
               .await
-              .ok(),
+            {
+              Ok(code) => Some(code),
+              Err(error) => {
+                eprintln!(
+                  "Failed to transpile {}: {error}",
+                  transpile_request.source_file_path.display()
+                );
+                None
+              }
+            },
           };
 
           if let Some(content) = content {

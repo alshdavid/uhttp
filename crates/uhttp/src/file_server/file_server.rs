@@ -6,6 +6,8 @@ use std::sync::Arc;
 use base64::Engine as _;
 use tokio::io::AsyncWriteExt;
 
+#[cfg(feature = "file_server_transpile")]
+use super::cache::CacheKey;
 use super::cache::CachedResponse;
 use super::cache::FileServerCache;
 use super::cache::TeeWriter;
@@ -30,6 +32,7 @@ use super::transpile::tsconfig::TsConfigCache;
 use super::transpile::typescript;
 use crate::HandleFunc;
 use crate::Request;
+use crate::Response;
 use crate::ResponseBody;
 use crate::StatusCode;
 use crate::file_server::compression::uncompressed_stream;
@@ -112,28 +115,101 @@ async fn transpile_source(
   .ok()
 }
 
+/// The transpiled response a request maps to.
+#[cfg(feature = "file_server_transpile")]
+struct TranspileRequest {
+  /// Value for the `Content-Type` header
+  mime_type: &'static str,
+  /// The source file to transpile
+  source_file_path: PathBuf,
+  /// URL the source is served from, recorded in the source map
+  source_url: String,
+  /// Whether only the source map is requested
+  source_map: bool,
+}
+
 /// Stream an in-memory body to the client, applying the negotiated content
 /// encoding on the way.
+///
+/// When `cache` is set the encoded body is buffered, up to the cache entry
+/// limit, and stored so later requests can replay it.
 #[cfg(feature = "file_server_transpile")]
 fn encode_body(
   encoding: Encoding,
   content: String,
+  mime_type: &'static str,
+  cache: Option<(Arc<FileServerCache>, CacheKey, u64)>,
 ) -> ResponseBody {
-  let (body, mut writer) = ResponseBody::chunked(BODY_BUFFER_SIZE);
+  let (body, writer) = ResponseBody::chunked(BODY_BUFFER_SIZE);
+  let mut tee = TeeWriter::new(
+    writer,
+    cache.as_ref().map(|(cache, _, _)| cache.max_entry_bytes()),
+  );
+
+  let content_encoding = encoding.header_value();
 
   tokio::task::spawn(async move {
     let input = content.as_bytes();
 
     let _ = match encoding {
-      Encoding::Zstd => zstd_stream(input, &mut writer).await,
-      Encoding::Brotli => brotli_stream(input, &mut writer).await,
-      Encoding::Gzip => gzip_stream(input, &mut writer).await,
-      Encoding::Identity => uncompressed_stream(input, &mut writer).await,
+      Encoding::Zstd => zstd_stream(input, &mut tee).await,
+      Encoding::Brotli => brotli_stream(input, &mut tee).await,
+      Encoding::Gzip => gzip_stream(input, &mut tee).await,
+      Encoding::Identity => uncompressed_stream(input, &mut tee).await,
     };
-    let _ = writer.shutdown().await;
+    let _ = tee.shutdown().await;
+
+    if let (Some((cache, key, generation)), Some(buffered)) = (cache, tee.into_buffered()) {
+      cache.set(
+        key,
+        CachedResponse {
+          status: StatusCode::OK,
+          mime_type: mime_type.to_string(),
+          content_encoding,
+          etag: None,
+          body: Arc::from(buffered),
+        },
+        generation,
+      );
+    }
   });
 
   body
+}
+
+/// Build a response that replays a cached body verbatim, honouring conditional
+/// requests.
+fn replay_cached(
+  req: &Request,
+  mut res: Response,
+  options: &FileServerOptions,
+  cached: CachedResponse,
+) -> crate::HandlerResult {
+  for (key, value) in &options.custom_headers {
+    res = res.header(key.as_str(), value.as_str());
+  }
+
+  res = res.header(headers::CONTENT_TYPE, cached.mime_type.as_str());
+
+  if let Some(content_encoding) = cached.content_encoding {
+    res = res.header(headers::CONTENT_ENCODING, content_encoding);
+  }
+
+  if let Some(etag) = cached.etag.as_ref() {
+    if !has_modified(req, etag) {
+      return res.status(StatusCode::NOT_MODIFIED).empty();
+    }
+    res = res.header(headers::ETAG, etag.as_str());
+  }
+
+  let (body, mut writer) = ResponseBody::chunked(BODY_BUFFER_SIZE);
+
+  tokio::task::spawn(async move {
+    let _ = writer.write_all(cached.body.as_ref()).await;
+    let _ = writer.shutdown().await;
+  });
+
+  res.status(cached.status).body(body)
 }
 
 pub struct FileServerOptions {
@@ -213,69 +289,106 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
       // a sibling `.js` file are never resolved to it here.
       #[cfg(feature = "file_server_transpile")]
       if let Some(transpile_options) = options.transpile {
+        // Resolve the request to a transpiled response without running the
+        // transpiler, so a cached response can be replayed without the work.
+        //
         // A linked source map is requested as the `.map` sibling of a source
         // file (e.g. `/main.tsx.map`). The `.map` file does not exist, so the
         // resolver reports it as missing; the map is produced on demand from
         // the source it names. A real `.map` file is served untouched.
-        if resolved.is_none()
-          && transpile_options.source_maps == SourceMapMode::Linked
+        let transpile_request = if let Some(resolved) = resolved.as_ref() {
+          transpile_kind(&resolved.path).map(|_| TranspileRequest {
+            mime_type: JAVASCRIPT_CONTENT_TYPE,
+            source_file_path: resolved.path.clone(),
+            source_url: req.uri.path().to_string(),
+            source_map: false,
+          })
+        } else if transpile_options.source_maps == SourceMapMode::Linked
           && let Some(source_path) = req.uri.path().strip_suffix(".map")
         {
           let source_file_path = options.root_dir.join(source_path.trim_start_matches('/'));
 
-          if let Some(result) =
-            transpile_source(&options, &tsconfig_cache, &source_file_path, source_path).await
-            && let Some(map) = result.map
+          transpile_kind(&source_file_path).map(|_| TranspileRequest {
+            mime_type: SOURCE_MAP_CONTENT_TYPE,
+            source_file_path,
+            source_url: source_path.to_string(),
+            source_map: true,
+          })
+        } else {
+          None
+        };
+
+        if let Some(transpile_request) = transpile_request {
+          // Transpiled responses are keyed by the request path so a source and
+          // its `.map` sibling do not share an entry. A request that fails to
+          // transpile falls through to the static path below, which keys by
+          // resolved path, so the two never collide.
+          let cache_key = (PathBuf::from(req.uri.path()), encoding);
+
+          if let Some(cache) = options.cache.as_ref()
+            && let Some(cached) = cache.get(&cache_key)
           {
-            for (key, value) in &options.custom_headers {
-              res = res.header(key.as_str(), value.as_str());
-            }
-
-            res = res.header(headers::CONTENT_TYPE, SOURCE_MAP_CONTENT_TYPE);
-
-            if let Some(content_encoding) = encoding.header_value() {
-              res = res.header(headers::CONTENT_ENCODING, content_encoding);
-            }
-
-            return res.status(StatusCode::OK).body(encode_body(encoding, map));
-          }
-        }
-
-        if let Some(resolved) = resolved.as_ref()
-          && let Some(result) =
-            transpile_source(&options, &tsconfig_cache, &resolved.path, req.uri.path()).await
-        {
-          for (key, value) in &options.custom_headers {
-            res = res.header(key.as_str(), value.as_str());
+            return replay_cached(&req, res, &options, cached);
           }
 
-          res = res.header(headers::CONTENT_TYPE, JAVASCRIPT_CONTENT_TYPE);
+          // Captured before rendering so a response rendered against an older
+          // generation cannot repopulate a cleared cache.
+          let cache_slot = options
+            .cache
+            .as_ref()
+            .map(|cache| (Arc::clone(cache), cache_key.clone(), cache.generation()));
 
-          let code = match (transpile_options.source_maps, result.map) {
-            // Inlined so the response stays a single, self-contained request.
-            (SourceMapMode::Inline, Some(map)) => format!(
-              "{}\n//# sourceMappingURL=data:application/json;base64,{}\n",
-              result.code,
-              base64::engine::general_purpose::STANDARD.encode(map.as_bytes()),
-            ),
-            // Linked so the browser fetches the `.map` sibling separately.
-            (SourceMapMode::Linked, Some(_)) => {
-              let map_name = resolved
-                .path
-                .file_name()
-                .and_then(|name| name.to_str())
-                .unwrap_or_default();
+          if let Some(result) = transpile_source(
+            &options,
+            &tsconfig_cache,
+            &transpile_request.source_file_path,
+            &transpile_request.source_url,
+          )
+          .await
+          {
+            let content = if transpile_request.source_map {
+              result.map
+            } else {
+              Some(match (transpile_options.source_maps, result.map) {
+                // Inlined so the response stays a single, self-contained request.
+                (SourceMapMode::Inline, Some(map)) => format!(
+                  "{}\n//# sourceMappingURL=data:application/json;base64,{}\n",
+                  result.code,
+                  base64::engine::general_purpose::STANDARD.encode(map.as_bytes()),
+                ),
+                // Linked so the browser fetches the `.map` sibling separately.
+                (SourceMapMode::Linked, Some(_)) => {
+                  let map_name = transpile_request
+                    .source_file_path
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .unwrap_or_default();
 
-              format!("{}\n//# sourceMappingURL={}.map\n", result.code, map_name)
+                  format!("{}\n//# sourceMappingURL={}.map\n", result.code, map_name)
+                }
+                (_, None) => result.code,
+              })
+            };
+
+            if let Some(content) = content {
+              for (key, value) in &options.custom_headers {
+                res = res.header(key.as_str(), value.as_str());
+              }
+
+              res = res.header(headers::CONTENT_TYPE, transpile_request.mime_type);
+
+              if let Some(content_encoding) = encoding.header_value() {
+                res = res.header(headers::CONTENT_ENCODING, content_encoding);
+              }
+
+              return res.status(StatusCode::OK).body(encode_body(
+                encoding,
+                content,
+                transpile_request.mime_type,
+                cache_slot,
+              ));
             }
-            (_, None) => result.code,
-          };
-
-          if let Some(content_encoding) = encoding.header_value() {
-            res = res.header(headers::CONTENT_ENCODING, content_encoding);
           }
-
-          return res.status(StatusCode::OK).body(encode_body(encoding, code));
         }
       }
 
@@ -288,31 +401,7 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
         && let Some(cache_key) = cache_key.as_ref()
         && let Some(cached) = cache.get(cache_key)
       {
-        for (key, value) in &options.custom_headers {
-          res = res.header(key.as_str(), value.as_str());
-        }
-
-        res = res.header(headers::CONTENT_TYPE, cached.mime_type.as_str());
-
-        if let Some(content_encoding) = cached.content_encoding {
-          res = res.header(headers::CONTENT_ENCODING, content_encoding);
-        }
-
-        if let Some(etag) = cached.etag.as_ref() {
-          if !has_modified(&req, etag) {
-            return res.status(StatusCode::NOT_MODIFIED).empty();
-          }
-          res = res.header(headers::ETAG, etag.as_str());
-        }
-
-        let (body, mut writer) = ResponseBody::chunked(BODY_BUFFER_SIZE);
-
-        tokio::task::spawn(async move {
-          let _ = writer.write_all(cached.body.as_ref()).await;
-          let _ = writer.shutdown().await;
-        });
-
-        return res.status(cached.status).body(body);
+        return replay_cached(&req, res, &options, cached);
       }
 
       let mut status = StatusCode::OK;

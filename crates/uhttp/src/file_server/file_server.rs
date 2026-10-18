@@ -37,15 +37,12 @@ use crate::headers;
 /// Size of the buffer bodies are streamed through on their way to the client
 pub const BODY_BUFFER_SIZE: usize = 64 * 1024;
 
-/// Content type responses carrying transpiled TypeScript are served with
 #[cfg(feature = "file_server_transpile")]
 const JAVASCRIPT_CONTENT_TYPE: &str = "application/javascript; charset=utf-8";
 
-/// Content type linked source maps are served with
 #[cfg(feature = "file_server_transpile")]
 const SOURCE_MAP_CONTENT_TYPE: &str = "application/json; charset=utf-8";
 
-/// Content type transpiled stylesheets are served with
 #[cfg(feature = "file_server_transpile")]
 const STYLESHEET_CONTENT_TYPE: &str = "text/css; charset=utf-8";
 
@@ -99,9 +96,7 @@ impl TranspileOptions {
 #[cfg(feature = "file_server_transpile")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum TranspileTarget {
-  /// TypeScript, transpiled to JavaScript
   TypeScript,
-  /// SCSS, transpiled to CSS
   StyleSheet,
 }
 
@@ -121,13 +116,9 @@ fn transpile_target(path: &Path) -> Option<(TranspileTarget, &'static str)> {
 /// The transpiled response a request maps to.
 #[cfg(feature = "file_server_transpile")]
 struct TranspileRequest {
-  /// The transpiler that renders the response
   target: TranspileTarget,
-  /// The syntax the source is parsed as
   kind: &'static str,
-  /// Value for the `Content-Type` header
   mime_type: &'static str,
-  /// The source file to transpile
   source_file_path: PathBuf,
   /// URL the source is served from, recorded in the source map
   source_url: String,
@@ -234,7 +225,7 @@ pub struct FileServerOptions {
   pub cache: Option<Arc<FileServerCache>>,
   /// Relative path to fallback URL. Defaults to "404.html"
   pub fallback_route: Option<String>,
-  /// Defaults to [`crate::StatusCode::NOT_FOUND] (404)
+  /// Defaults to [`crate::StatusCode::NOT_FOUND`] (404)
   pub fallback_status: Option<StatusCode>,
   /// Try to resolve html files on paths without specified files
   ///  `/`    -> `/index.html`

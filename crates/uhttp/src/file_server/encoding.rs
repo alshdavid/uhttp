@@ -10,7 +10,6 @@ pub(crate) enum Encoding {
 }
 
 impl Encoding {
-  /// Value to send back in the `Content-Encoding` header, if any
   pub(crate) fn header_value(&self) -> Option<&'static str> {
     match self {
       Self::Zstd => Some("zstd"),
@@ -35,7 +34,6 @@ impl EncodingResolver {
     compress.then_some(EncodingResolver)
   }
 
-  /// Pick an encoding to respond with based on the request's `Accept-Encoding`
   pub(crate) fn resolve(
     &self,
     req: &Request,

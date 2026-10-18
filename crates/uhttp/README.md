@@ -16,7 +16,9 @@ cargo add uhttp -F json                       # JSON body deserialization
 cargo add uhttp -F router                     # Router for URLs
 cargo add uhttp -F websocket                  # Support for Websockets
 cargo add uhttp -F file_server                # File server that reads from the file system
-cargo add uhttp -F full                       # Everything
+cargo add uhttp -F file_server_include_dir    # Serve files embedded in the binary
+cargo add uhttp -F file_server_transpile      # JIT transpile TypeScript and SCSS
+cargo add uhttp -F full                       # json, router, websocket and file_server
 ```
 
 ## Usage
@@ -99,6 +101,74 @@ async fn main() -> anyhow::Result<()> {
         .compress(true)
         // ETag to prevent client from making multiple requests
         .etag(ETagStrategy::LastModified)
+        .build()?,
+    )
+    .listen("0.0.0.0:8080")
+    .await?;
+
+  Ok(())
+}
+```
+
+### Embedded Assets
+
+With the `file_server_include_dir` feature, files compiled into the binary are served in place of the filesystem.
+
+```shell
+cargo add include_dir
+```
+
+```rust
+use include_dir::Dir;
+use include_dir::include_dir;
+use uhttp::Server;
+use uhttp::file_server::AsyncIncludeDirFileSystem;
+use uhttp::file_server::FileServer;
+
+static STATIC_DIR: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/static");
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+  Server::builder()
+    .handler(
+      FileServer::builder()
+        .file_system(AsyncIncludeDirFileSystem::new(STATIC_DIR.clone()))
+        // Paths resolve against the embedded root
+        .root_dir("/")
+        .compress(true)
+        .build()?,
+    )
+    .listen("0.0.0.0:8080")
+    .await?;
+
+  Ok(())
+}
+```
+
+### Transpiled Assets
+
+With the `file_server_transpile` feature, TypeScript is transpiled to JavaScript and SCSS / Sass to CSS on request. Compiler options are read from the nearest `tsconfig.json` or `deno.json`.
+
+```rust
+use uhttp::Server;
+use uhttp::file_server::FileServer;
+use uhttp::file_server::SourceMapMode;
+use uhttp::file_server::TranspileOptions;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+  Server::builder()
+    .handler(
+      FileServer::builder()
+        .root_dir("./static")
+        .compress(true)
+        .transpile(TranspileOptions {
+          source_maps: SourceMapMode::Linked,
+          minify: true,
+          mangle: true,
+          compress: true,
+          worker_threads: None,
+        })
         .build()?,
     )
     .listen("0.0.0.0:8080")

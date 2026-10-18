@@ -97,7 +97,6 @@ impl Response {
     Ok(response?)
   }
 
-  /// Build a response with an empty body.
   pub fn empty(self) -> crate::Result<super::types::HyperInfallibleResponse> {
     self.body(vec![])
   }

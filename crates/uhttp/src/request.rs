@@ -18,21 +18,11 @@ use super::types::HttpRequest;
 use super::types::HttpStreamReader;
 
 pub struct Request {
-  /// The request's method
   pub method: Method,
-
-  /// The request's URI
   pub uri: Uri,
-
-  /// The request's version
   pub version: Version,
-
-  /// The request's headers
   pub headers: HeaderMap<HeaderValue>,
-
-  /// The request's extensions
   pub extensions: Extensions,
-
   pub body: Pin<Box<dyn AsyncRead + Send>>,
 
   #[cfg(feature = "router")]
@@ -107,7 +97,6 @@ impl Request {
       #[cfg(feature = "router")]
       params: HashMap::new(),
       body: Box::pin(body),
-      // Set by the router once a route matches; see the field docs.
       #[cfg(feature = "router")]
       route: None,
     }

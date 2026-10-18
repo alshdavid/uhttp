@@ -1,4 +1,6 @@
 mod builder;
+#[cfg(feature = "file_server_transpile")]
+mod builder_transpile;
 mod cache;
 mod compression;
 mod custom_headers;
@@ -13,6 +15,8 @@ mod resolver;
 mod transpile;
 
 pub use self::builder::*;
+#[cfg(feature = "file_server_transpile")]
+pub use self::builder_transpile::*;
 pub use self::cache::CachedResponse;
 pub use self::cache::FileServerCache;
 pub use self::cache::FileServerCacheOptions;

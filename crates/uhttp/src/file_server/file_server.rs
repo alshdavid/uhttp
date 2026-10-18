@@ -4,6 +4,9 @@ use std::sync::Arc;
 
 use tokio::io::AsyncWriteExt;
 
+use super::cache::CachedResponse;
+use super::cache::FileServerCache;
+use super::cache::TeeWriter;
 use super::compression::brotli_stream;
 use super::compression::gzip_stream;
 use super::compression::zstd_stream;
@@ -47,6 +50,8 @@ pub struct FileServerOptions {
   pub etag: ETagStrategy,
   /// Add Custom Headers
   pub custom_headers: HashMap<String, String>,
+  /// Optional in-memory cache of rendered responses.
+  pub cache: Option<Arc<FileServerCache>>,
   /// Relative path to fallback URL. Defaults to "404.html"
   pub fallback_route: Option<String>,
   /// Defaults to [`crate::StatusCode::NOT_FOUND] (404)
@@ -88,8 +93,47 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
       let resolved = resolver.resolve(req.uri.path()).await?;
       let file_path = resolved.path;
 
+      let encoding = match encoding_resolver.as_ref() {
+        Some(resolver) => resolver.resolve(&req),
+        None => Encoding::Identity,
+      };
+
+      let cache_key = (file_path.clone(), encoding);
+
+      // Fast path: replay a fully rendered response from the cache.
+      if let Some(cache) = options.cache.as_ref()
+        && let Some(cached) = cache.get(&cache_key)
+      {
+        for (key, value) in &options.custom_headers {
+          res = res.header(key.as_str(), value.as_str());
+        }
+
+        res = res.header(headers::CONTENT_TYPE, cached.mime_type.as_str());
+
+        if let Some(content_encoding) = cached.content_encoding {
+          res = res.header(headers::CONTENT_ENCODING, content_encoding);
+        }
+
+        if let Some(etag) = cached.etag.as_ref() {
+          if !has_modified(&req, etag) {
+            return res.status(StatusCode::NOT_MODIFIED).empty();
+          }
+          res = res.header(headers::ETAG, etag.as_str());
+        }
+
+        let (body, mut writer) = ResponseBody::chunked(BODY_BUFFER_SIZE);
+
+        tokio::task::spawn(async move {
+          let _ = writer.write_all(cached.body.as_ref()).await;
+          let _ = writer.shutdown().await;
+        });
+
+        return res.status(cached.status).body(body);
+      }
+
       let mut status = StatusCode::OK;
       let mut mime_type = Option::<&String>::None;
+      let mut cacheable = true;
 
       let mut file = match options.file_system.open(&file_path).await {
         Ok(file) => {
@@ -100,6 +144,7 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
           Ok(file) => {
             status = fallback.status;
             mime_type.replace(&fallback.mime_type);
+            cacheable = false;
             file
           }
           Err(_) => return res.status(StatusCode::NOT_FOUND).empty(),
@@ -114,36 +159,70 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
         res = res.header(headers::CONTENT_TYPE, mime_type.as_str());
       }
 
-      let encoding = match encoding_resolver.as_ref() {
-        Some(resolver) => resolver.resolve(&req),
-        None => Encoding::Identity,
-      };
-
       if let Some(content_encoding) = encoding.header_value() {
         res = res.header(headers::CONTENT_ENCODING, content_encoding);
       }
 
-      if let Some(etag_resolver) = etag_resolver.as_ref()
-        && let Some(etag) = etag_resolver
-          .resolve(&mut *file, encoding.etag_suffix())
-          .await?
-      {
-        if !has_modified(&req, &etag) {
+      let etag = match etag_resolver.as_ref() {
+        Some(etag_resolver) => {
+          etag_resolver
+            .resolve(&mut *file, encoding.etag_suffix())
+            .await?
+        }
+        None => None,
+      };
+
+      if let Some(etag) = etag.as_ref() {
+        if !has_modified(&req, etag) {
           return res.status(StatusCode::NOT_MODIFIED).empty();
         }
         res = res.header(headers::ETAG, etag.as_str());
       }
 
-      let (body, mut writer) = ResponseBody::chunked(BODY_BUFFER_SIZE);
+      let cache_slot = match (options.cache.as_ref(), cacheable) {
+        (Some(cache), true) => {
+          let fits = match file.metadata().await {
+            Ok(meta) => meta.len() as usize <= cache.max_entry_bytes(),
+            Err(_) => false,
+          };
+          fits.then(|| (Arc::clone(cache), cache.generation()))
+        }
+        _ => None,
+      };
+
+      let (body, writer) = ResponseBody::chunked(BODY_BUFFER_SIZE);
+      let mut tee = TeeWriter::new(
+        writer,
+        cache_slot
+          .as_ref()
+          .map(|(cache, _)| cache.max_entry_bytes()),
+      );
+
+      let content_encoding = encoding.header_value();
+      let mime_type = mime_type.cloned();
 
       tokio::task::spawn(async move {
         let _ = match encoding {
-          Encoding::Zstd => zstd_stream(&mut file, &mut writer).await,
-          Encoding::Brotli => brotli_stream(&mut file, &mut writer).await,
-          Encoding::Gzip => gzip_stream(&mut file, &mut writer).await,
-          Encoding::Identity => uncompressed_stream(&mut file, &mut writer).await,
+          Encoding::Zstd => zstd_stream(&mut file, &mut tee).await,
+          Encoding::Brotli => brotli_stream(&mut file, &mut tee).await,
+          Encoding::Gzip => gzip_stream(&mut file, &mut tee).await,
+          Encoding::Identity => uncompressed_stream(&mut file, &mut tee).await,
         };
-        let _ = writer.shutdown().await;
+        let _ = tee.shutdown().await;
+
+        if let (Some((cache, generation)), Some(buffered)) = (cache_slot, tee.into_buffered()) {
+          cache.set(
+            cache_key,
+            CachedResponse {
+              status,
+              mime_type: mime_type.unwrap_or_default(),
+              content_encoding,
+              etag,
+              body: Arc::from(buffered),
+            },
+            generation,
+          );
+        }
       });
 
       res.status(status).body(body)

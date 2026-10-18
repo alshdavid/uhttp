@@ -1,7 +1,7 @@
 use crate::Request;
 use crate::headers;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum Encoding {
   Zstd,
   Brotli,

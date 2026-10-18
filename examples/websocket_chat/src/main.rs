@@ -103,6 +103,7 @@ async fn main() -> anyhow::Result<()> {
       implicit_extensions: true,
       etag: ETagStrategy::LastModified,
       custom_headers: Default::default(),
+      cache: None,
       fallback_route: Default::default(),
       fallback_status: Default::default(),
     })?),

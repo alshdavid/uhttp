@@ -23,6 +23,7 @@ async fn main() -> anyhow::Result<()> {
       implicit_extensions: true,
       etag: ETagStrategy::LastModified,
       custom_headers: Default::default(),
+      cache: None,
       fallback_route: Some("index.html".to_string()),
       fallback_status: Some(StatusCode::OK),
     })?)

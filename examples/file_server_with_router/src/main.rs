@@ -7,8 +7,7 @@ use std::path::PathBuf;
 
 use uhttp::Server;
 use uhttp::StatusCode;
-use uhttp::file_server::ETagStrategy;
-use uhttp::file_server::FileServerOptions;
+use uhttp::file_server::FileServer;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -23,17 +22,13 @@ async fn main() -> anyhow::Result<()> {
 
   app.get(
     "/*",
-    uhttp::router::without_context(uhttp::file_server::create(FileServerOptions {
-      root_dir: static_files_dir,
-      file_system: uhttp::file_server::TokioFileSystem::new(),
-      compress: true,
-      implicit_extensions: true,
-      etag: ETagStrategy::LastModified,
-      custom_headers: Default::default(),
-      cache: None,
-      fallback_route: Default::default(),
-      fallback_status: Default::default(),
-    })?),
+    uhttp::router::without_context(
+      FileServer::builder()
+        .root_dir(static_files_dir)
+        .compress(true)
+        .implicit_extensions(true)
+        .build()?,
+    ),
   );
 
   Server::builder()

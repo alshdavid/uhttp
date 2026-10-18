@@ -7,8 +7,7 @@ use std::path::PathBuf;
 
 use uhttp::Server;
 use uhttp::StatusCode;
-use uhttp::file_server::ETagStrategy;
-use uhttp::file_server::FileServerOptions;
+use uhttp::file_server::FileServer;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -16,17 +15,15 @@ async fn main() -> anyhow::Result<()> {
   let static_files_dir: PathBuf = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("static");
 
   Server::builder()
-    .handler(uhttp::file_server::create(FileServerOptions {
-      root_dir: static_files_dir,
-      file_system: uhttp::file_server::TokioFileSystem::new(),
-      compress: true,
-      implicit_extensions: true,
-      etag: ETagStrategy::LastModified,
-      custom_headers: Default::default(),
-      cache: None,
-      fallback_route: Some("index.html".to_string()),
-      fallback_status: Some(StatusCode::OK),
-    })?)
+    .handler(
+      FileServer::builder()
+        .root_dir(static_files_dir)
+        .compress(true)
+        .implicit_extensions(true)
+        .fallback_route("index.html")
+        .fallback_status(StatusCode::OK)
+        .build()?,
+    )
     .listen("0.0.0.0:8080")
     .await?;
 

@@ -10,9 +10,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use uhttp::Server;
 use uhttp::Websocket;
-use uhttp::file_server;
-use uhttp::file_server::ETagStrategy;
-use uhttp::file_server::FileServerOptions;
+use uhttp::file_server::FileServer;
 
 use crate::chat_service::ChatService;
 
@@ -96,17 +94,12 @@ async fn main() -> anyhow::Result<()> {
   // Serve static files from the "static" directory, and return 404 for missing files
   app.get(
     "/*",
-    uhttp::router::without_context(file_server::create(FileServerOptions {
-      root_dir: PathBuf::from(CARGO_MANIFEST_DIR).join("static"),
-      file_system: uhttp::file_server::TokioFileSystem::new(),
-      compress: false,
-      implicit_extensions: true,
-      etag: ETagStrategy::LastModified,
-      custom_headers: Default::default(),
-      cache: None,
-      fallback_route: Default::default(),
-      fallback_status: Default::default(),
-    })?),
+    uhttp::router::without_context(
+      FileServer::builder()
+        .root_dir(PathBuf::from(CARGO_MANIFEST_DIR).join("static"))
+        .implicit_extensions(true)
+        .build()?,
+    ),
   );
 
   Server::builder()

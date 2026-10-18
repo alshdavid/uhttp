@@ -1,3 +1,4 @@
+mod builder;
 mod cache;
 mod compression;
 mod custom_headers;
@@ -9,6 +10,7 @@ mod file_system;
 mod mime;
 mod resolver;
 
+pub use self::builder::*;
 pub use self::cache::CachedResponse;
 pub use self::cache::FileServerCache;
 pub use self::cache::FileServerCacheOptions;

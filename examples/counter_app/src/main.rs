@@ -10,9 +10,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use uhttp::Server;
-use uhttp::file_server;
-use uhttp::file_server::ETagStrategy;
-use uhttp::file_server::FileServerOptions;
+use uhttp::file_server::FileServer;
 
 use crate::context::Context;
 use crate::services::counter_service::CounterService;
@@ -36,17 +34,12 @@ async fn main() -> anyhow::Result<()> {
   app.post("/api/counter/decrement", handlers::api_events_counter_decrement_post);
 
   app
-    .get("/*", uhttp::router::without_context(file_server::create(FileServerOptions {
-      root_dir: PathBuf::from(CARGO_MANIFEST_DIR).join("static"),
-      file_system: uhttp::file_server::TokioFileSystem::new(),
-      compress: false,
-      etag: ETagStrategy::LastModified,
-      implicit_extensions: true,
-      custom_headers: Default::default(),
-      cache: None,
-      fallback_route: Default::default(),
-      fallback_status: Default::default(),
-    })?));
+    .get("/*", uhttp::router::without_context(
+      FileServer::builder()
+        .root_dir(PathBuf::from(CARGO_MANIFEST_DIR).join("static"))
+        .implicit_extensions(true)
+        .build()?,
+    ));
 
   Server::builder()
     .handler(app.handler())

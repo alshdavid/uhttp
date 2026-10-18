@@ -2,13 +2,18 @@
 
 pub const ACCEPT: &str = "Accept";
 pub const ACCEPT_ENCODING: &str = "Accept-Encoding";
+pub const ACCESS_CONTROL_ALLOW_METHODS: &str = "Access-Control-Allow-Methods";
+pub const ACCESS_CONTROL_ALLOW_ORIGIN: &str = "Access-Control-Allow-Origin";
 pub const AUTHORIZATION: &str = "Authorization";
 pub const CACHE_CONTROL: &str = "Cache-Control";
 pub const CONNECTION: &str = "Connection";
 pub const CONTENT_ENCODING: &str = "Content-Encoding";
 pub const CONTENT_LENGTH: &str = "Content-Length";
+pub const CONTENT_SECURITY_POLICY: &str = "Content-Security-Policy";
 pub const CONTENT_TYPE: &str = "Content-Type";
 pub const COOKIE: &str = "Cookie";
+pub const CROSS_ORIGIN_EMBEDDER_POLICY: &str = "Cross-Origin-Embedder-Policy";
+pub const CROSS_ORIGIN_OPENER_POLICY: &str = "Cross-Origin-Opener-Policy";
 pub const DATE: &str = "Date";
 pub const ETAG: &str = "ETag";
 pub const HOST: &str = "Host";
@@ -18,3 +23,4 @@ pub const LOCATION: &str = "Location";
 pub const ORIGIN: &str = "Origin";
 pub const SET_COOKIE: &str = "Set-Cookie";
 pub const USER_AGENT: &str = "User-Agent";
+pub const X_FRAME_OPTIONS: &str = "X-Frame-Options";

@@ -27,6 +27,7 @@ async fn main() -> anyhow::Result<()> {
           minify: true,
           mangle: true,
           compress: true,
+          worker_threads: None,
         })
         .build()?,
     )

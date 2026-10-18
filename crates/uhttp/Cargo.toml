@@ -20,6 +20,7 @@ file_server_transpile = [
   "dep:swc_core",
   "dep:grass",
   "dep:normalize-path",
+  "dep:crossbeam",
 ]
 
 [lints]
@@ -90,3 +91,4 @@ swc_core = { version = "82.0.2", features = [
 ], optional = true }
 grass = { version = "0.13", default-features = false, optional = true }
 normalize-path = { version = "0.2.2", optional = true }
+crossbeam = { workspace = true, optional = true }

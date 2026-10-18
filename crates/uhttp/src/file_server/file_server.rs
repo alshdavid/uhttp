@@ -86,6 +86,8 @@ pub struct TranspileOptions {
   pub mangle: bool,
   /// Apply size reducing transforms to the syntax tree
   pub compress: bool,
+  /// Defaults to [`std::thread::available_parallelism`] when `None`.
+  pub worker_threads: Option<usize>,
 }
 
 #[cfg(feature = "file_server_transpile")]
@@ -310,7 +312,14 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
       },
       None => grass::OutputStyle::Expanded,
     },
-  )?);
+    match &options.transpile {
+      Some(options) => match options.worker_threads {
+        Some(worker_threads) => worker_threads,
+        None => std::thread::available_parallelism()?.into(),
+      },
+      None => std::thread::available_parallelism()?.into(),
+    },
+  ));
 
   Ok(Box::new(move |req, mut res| {
     let options = Arc::clone(&options);
@@ -490,11 +499,10 @@ pub fn create(options: FileServerOptions) -> crate::Result<HandleFunc> {
                 })
               })
             }
-            TranspileTarget::StyleSheet => {
-              scss_transformer
-                .transpile(&transpile_request.source_file_path, transpile_request.kind)
-                .await
-            }
+            TranspileTarget::StyleSheet => scss_transformer
+              .transpile(&transpile_request.source_file_path, transpile_request.kind)
+              .await
+              .ok(),
           };
 
           if let Some(content) = content {

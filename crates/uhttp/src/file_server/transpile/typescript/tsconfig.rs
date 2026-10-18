@@ -1,13 +1,64 @@
 use std::collections::HashMap;
-use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::sync::Mutex;
 
+use dyn_fs::asynch::AsyncFileSystem;
 use serde::Deserialize;
 use serde_json::Value;
+use tokio::runtime::Handle;
 
 const CONFIG_FILE_NAMES: [&str; 2] = ["deno.json", "tsconfig.json"];
+
+/// A synchronous view of the file system configs are resolved against.
+///
+/// Resolution walks directories and reads files, and runs on the compiler's
+/// worker thread rather than the async runtime, so the async file system is
+/// driven to completion here.
+#[derive(Clone)]
+pub struct ConfigFs {
+  fs: Arc<dyn AsyncFileSystem>,
+  tokio: Handle,
+}
+
+impl ConfigFs {
+  pub fn new(
+    fs: Arc<dyn AsyncFileSystem>,
+    tokio: Handle,
+  ) -> Self {
+    Self { fs, tokio }
+  }
+
+  fn is_file(
+    &self,
+    path: &Path,
+  ) -> bool {
+    self.tokio.block_on(async {
+      match self.fs.metadata(path).await {
+        Ok(metadata) => metadata.is_file(),
+        Err(_) => false,
+      }
+    })
+  }
+
+  fn read_to_string(
+    &self,
+    path: &Path,
+  ) -> Option<String> {
+    self.tokio.block_on(self.fs.read_to_string(path)).ok()
+  }
+
+  fn canonicalize(
+    &self,
+    path: &Path,
+  ) -> PathBuf {
+    self
+      .tokio
+      .block_on(self.fs.canonicalize(path))
+      .unwrap_or_else(|_| path.to_path_buf())
+  }
+}
 
 /// The `jsx` compiler option values relevant to transpilation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -121,6 +172,7 @@ impl CompilerOptions {
 /// Returns the path to the nearest `deno.json` or `tsconfig.json`. A
 /// `deno.json` is preferred when both sit in the same directory.
 pub fn find_nearest_tsconfig(
+  fs: &ConfigFs,
   file_path: &Path,
   stop_dir: &Path,
 ) -> Option<PathBuf> {
@@ -130,7 +182,7 @@ pub fn find_nearest_tsconfig(
     for name in CONFIG_FILE_NAMES {
       let candidate = current.join(name);
 
-      if candidate.is_file() {
+      if fs.is_file(&candidate) {
         return Some(candidate);
       }
     }
@@ -156,8 +208,11 @@ pub fn find_nearest_tsconfig(
 ///
 /// Missing files and invalid JSON are treated as "no config" (`None`) because
 /// a malformed config should not stop the server from serving files.
-pub fn load_tsconfig(path: &Path) -> Option<TsConfig> {
-  let (options, signature) = load_chain(path, 0, &mut Vec::new())?;
+pub fn load_tsconfig(
+  fs: &ConfigFs,
+  path: &Path,
+) -> Option<TsConfig> {
+  let (options, signature) = load_chain(fs, path, 0, &mut Vec::new())?;
 
   let get = |key: &str| options.get(key).and_then(|value| value.as_str());
 
@@ -173,6 +228,7 @@ pub fn load_tsconfig(path: &Path) -> Option<TsConfig> {
 /// Recursively load a config and its parents, returning the merged compiler
 /// options and a signature derived from the contents of every file read.
 fn load_chain(
+  fs: &ConfigFs,
   path: &Path,
   depth: usize,
   visited: &mut Vec<PathBuf>,
@@ -181,14 +237,14 @@ fn load_chain(
   if depth > 16 {
     return None;
   }
-  let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+  let canonical = fs.canonicalize(path);
 
   if visited.contains(&canonical) {
     return None;
   }
-  visited.push(canonical.clone());
+  visited.push(canonical);
 
-  let contents = fs::read_to_string(path).ok()?;
+  let contents = fs.read_to_string(path)?;
   let raw: RawTsConfig = serde_json::from_str(&contents).ok()?;
 
   let mut options = HashMap::new();
@@ -196,8 +252,8 @@ fn load_chain(
   // The `extends` chain is resolved first so that child options win
   if let Some(extends) = raw.extends.as_ref() {
     for specifier in extends_specifiers(extends) {
-      if let Some(extended_path) = resolve_extends(path, &specifier)
-        && let Some((parent_options, _)) = load_chain(&extended_path, depth + 1, visited)
+      if let Some(extended_path) = resolve_extends(fs, path, &specifier)
+        && let Some((parent_options, _)) = load_chain(fs, &extended_path, depth + 1, visited)
       {
         options.extend(parent_options);
       }
@@ -235,6 +291,7 @@ fn extends_specifiers(value: &Value) -> Vec<String> {
 /// a node package (e.g. `@tsconfig/node20/tsconfig.json`) by walking up the
 /// directory tree looking for a `node_modules` folder.
 fn resolve_extends(
+  fs: &ConfigFs,
   config_path: &Path,
   specifier: &str,
 ) -> Option<PathBuf> {
@@ -253,7 +310,7 @@ fn resolve_extends(
 
   if specifier.starts_with('.') || specifier.starts_with('/') {
     let candidate = with_json(base_dir.join(specifier));
-    if candidate.is_file() {
+    if fs.is_file(&candidate) {
       return Some(candidate);
     }
     return None;
@@ -264,7 +321,7 @@ fn resolve_extends(
   while let Some(dir) = current {
     let candidate = with_json(dir.join("node_modules").join(specifier));
 
-    if candidate.is_file() {
+    if fs.is_file(&candidate) {
       return Some(candidate);
     }
 
@@ -310,6 +367,7 @@ impl TsConfigCache {
   /// config files have not changed.
   pub fn resolve(
     &self,
+    fs: &ConfigFs,
     file_path: &Path,
     stop_dir: &Path,
   ) -> TsConfig {
@@ -319,15 +377,15 @@ impl TsConfigCache {
       let entries = self.entries.lock().ok();
       if let Some(entries) = entries.as_ref()
         && let Some(cached) = entries.get(&key)
-        && is_fresh(cached, file_path, stop_dir)
+        && is_fresh(fs, cached, file_path, stop_dir)
       {
         return cached.config.clone();
       }
     }
 
-    let config_path = find_nearest_tsconfig(file_path, stop_dir);
+    let config_path = find_nearest_tsconfig(fs, file_path, stop_dir);
     let config = match config_path.as_ref() {
-      Some(path) => load_tsconfig(path).unwrap_or_else(TsConfig::defaults),
+      Some(path) => load_tsconfig(fs, path).unwrap_or_else(TsConfig::defaults),
       None => TsConfig::defaults(),
     };
 
@@ -348,13 +406,14 @@ impl TsConfigCache {
 
 /// Returns `true` when the cached entry still reflects what is on disk.
 fn is_fresh(
+  fs: &ConfigFs,
   cached: &CachedConfig,
   file_path: &Path,
   stop_dir: &Path,
 ) -> bool {
   // Re-run the lookup so that a config appearing, disappearing or taking
   // priority over the cached one invalidates the entry.
-  if find_nearest_tsconfig(file_path, stop_dir) != cached.config_path {
+  if find_nearest_tsconfig(fs, file_path, stop_dir) != cached.config_path {
     return false;
   }
 
@@ -362,7 +421,7 @@ fn is_fresh(
     return true;
   };
 
-  let Ok(contents) = fs::read_to_string(path) else {
+  let Some(contents) = fs.read_to_string(path) else {
     return false;
   };
 
@@ -371,9 +430,18 @@ fn is_fresh(
 
 #[cfg(test)]
 mod tests {
+  use std::fs;
   use std::io::Write;
 
+  use dyn_fs::asynch::TokioFileSystem;
+
   use super::*;
+
+  fn test_fs() -> (ConfigFs, tokio::runtime::Runtime) {
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let fs = ConfigFs::new(TokioFileSystem::new(), runtime.handle().clone());
+    (fs, runtime)
+  }
 
   fn temp_dir(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!(
@@ -412,10 +480,11 @@ mod tests {
     let file = nested.join("main.tsx");
     write(&file, "export const a = 1;");
 
-    let found = find_nearest_tsconfig(&file, &dir).unwrap();
+    let (fs, _runtime) = test_fs();
+    let found = find_nearest_tsconfig(&fs, &file, &dir).unwrap();
     assert_eq!(found, dir.join("a/tsconfig.json"));
 
-    let config = load_tsconfig(&found).unwrap();
+    let config = load_tsconfig(&fs, &found).unwrap();
     assert_eq!(config.jsx, Some(JsxMode::React));
   }
 
@@ -444,10 +513,11 @@ mod tests {
     let file = nested.join("main.tsx");
     write(&file, "export const a = 1;");
 
-    let found = find_nearest_tsconfig(&file, &dir).unwrap();
+    let (fs, _runtime) = test_fs();
+    let found = find_nearest_tsconfig(&fs, &file, &dir).unwrap();
     assert_eq!(found, dir.join("a/deno.json"));
 
-    let config = load_tsconfig(&found).unwrap();
+    let config = load_tsconfig(&fs, &found).unwrap();
     assert_eq!(config.jsx, Some(JsxMode::React));
     assert_eq!(config.jsx_factory.as_deref(), Some("h"));
     assert_eq!(config.jsx_fragment_factory.as_deref(), Some("Fragment"));
@@ -468,9 +538,13 @@ mod tests {
     let file = dir.join("main.tsx");
     write(&file, "export const a = 1;");
 
-    let found = find_nearest_tsconfig(&file, &dir).unwrap();
+    let (fs, _runtime) = test_fs();
+    let found = find_nearest_tsconfig(&fs, &file, &dir).unwrap();
     assert_eq!(found, dir.join("deno.json"));
-    assert_eq!(load_tsconfig(&found).unwrap().jsx, Some(JsxMode::React));
+    assert_eq!(
+      load_tsconfig(&fs, &found).unwrap().jsx,
+      Some(JsxMode::React)
+    );
   }
 
   #[test]
@@ -491,9 +565,13 @@ mod tests {
     let file = nested.join("main.tsx");
     write(&file, "export const a = 1;");
 
-    let found = find_nearest_tsconfig(&file, &dir).unwrap();
+    let (fs, _runtime) = test_fs();
+    let found = find_nearest_tsconfig(&fs, &file, &dir).unwrap();
     assert_eq!(found, nested.join("tsconfig.json"));
-    assert_eq!(load_tsconfig(&found).unwrap().jsx, Some(JsxMode::ReactJsx));
+    assert_eq!(
+      load_tsconfig(&fs, &found).unwrap().jsx,
+      Some(JsxMode::ReactJsx)
+    );
   }
 
   #[test]
@@ -508,7 +586,8 @@ mod tests {
       r#"{ "extends": "./deno.base.json", "compilerOptions": { "jsxFactory": "h" } }"#,
     );
 
-    let config = load_tsconfig(&dir.join("deno.json")).unwrap();
+    let (fs, _runtime) = test_fs();
+    let config = load_tsconfig(&fs, &dir.join("deno.json")).unwrap();
     assert_eq!(config.jsx, Some(JsxMode::React));
     assert_eq!(config.jsx_factory.as_deref(), Some("h"));
   }
@@ -524,20 +603,21 @@ mod tests {
     let file = dir.join("main.tsx");
     write(&file, "export const a = 1;");
 
+    let (fs, _runtime) = test_fs();
     let cache = TsConfigCache::new();
-    assert_eq!(cache.resolve(&file, &dir).jsx, Some(JsxMode::ReactJsx));
+    assert_eq!(cache.resolve(&fs, &file, &dir).jsx, Some(JsxMode::ReactJsx));
 
     write(
       &dir.join("deno.json"),
       r#"{ "compilerOptions": { "jsx": "react" } }"#,
     );
-    assert_eq!(cache.resolve(&file, &dir).jsx, Some(JsxMode::React));
+    assert_eq!(cache.resolve(&fs, &file, &dir).jsx, Some(JsxMode::React));
 
     write(
       &dir.join("deno.json"),
       r#"{ "compilerOptions": { "jsx": "react-jsx" } }"#,
     );
-    assert_eq!(cache.resolve(&file, &dir).jsx, Some(JsxMode::ReactJsx));
+    assert_eq!(cache.resolve(&fs, &file, &dir).jsx, Some(JsxMode::ReactJsx));
   }
 
   #[test]
@@ -555,10 +635,11 @@ mod tests {
     let file = serve.join("main.tsx");
     write(&file, "export const a = 1;");
 
-    assert_eq!(find_nearest_tsconfig(&file, &serve), None);
+    let (fs, _runtime) = test_fs();
+    assert_eq!(find_nearest_tsconfig(&fs, &file, &serve), None);
 
     let cache = TsConfigCache::new();
-    assert_eq!(cache.resolve(&file, &serve).jsx, None);
+    assert_eq!(cache.resolve(&fs, &file, &serve).jsx, None);
   }
 
   #[test]
@@ -573,7 +654,8 @@ mod tests {
       r#"{ "extends": "./tsconfig.base.json", "compilerOptions": {} }"#,
     );
 
-    let config = load_tsconfig(&dir.join("tsconfig.json")).unwrap();
+    let (fs, _runtime) = test_fs();
+    let config = load_tsconfig(&fs, &dir.join("tsconfig.json")).unwrap();
     assert_eq!(config.jsx, Some(JsxMode::React));
   }
 
@@ -589,7 +671,8 @@ mod tests {
       r#"{ "extends": "./tsconfig.base.json", "compilerOptions": { "jsx": "react-jsx" } }"#,
     );
 
-    let config = load_tsconfig(&dir.join("tsconfig.json")).unwrap();
+    let (fs, _runtime) = test_fs();
+    let config = load_tsconfig(&fs, &dir.join("tsconfig.json")).unwrap();
     assert_eq!(config.jsx, Some(JsxMode::ReactJsx));
   }
 
@@ -598,7 +681,8 @@ mod tests {
     let dir = temp_dir("malformed");
     write(&dir.join("tsconfig.json"), "{ not valid json");
 
-    assert!(load_tsconfig(&dir.join("tsconfig.json")).is_none());
+    let (fs, _runtime) = test_fs();
+    assert!(load_tsconfig(&fs, &dir.join("tsconfig.json")).is_none());
   }
 
   #[test]
@@ -624,7 +708,8 @@ mod tests {
       }"#,
     );
 
-    let config = load_tsconfig(&dir.join("tsconfig.json")).unwrap();
+    let (fs, _runtime) = test_fs();
+    let config = load_tsconfig(&fs, &dir.join("tsconfig.json")).unwrap();
     assert_eq!(config.jsx, Some(JsxMode::React));
     assert_eq!(config.jsx_factory.as_deref(), Some("h"));
     assert_eq!(config.jsx_fragment_factory, None);
@@ -640,13 +725,14 @@ mod tests {
     let file = dir.join("main.tsx");
     write(&file, "export const a = 1;");
 
+    let (fs, _runtime) = test_fs();
     let cache = TsConfigCache::new();
-    assert_eq!(cache.resolve(&file, &dir).jsx, Some(JsxMode::React));
+    assert_eq!(cache.resolve(&fs, &file, &dir).jsx, Some(JsxMode::React));
 
     write(
       &config_path,
       r#"{ "compilerOptions": { "jsx": "react-jsx" } }"#,
     );
-    assert_eq!(cache.resolve(&file, &dir).jsx, Some(JsxMode::ReactJsx));
+    assert_eq!(cache.resolve(&fs, &file, &dir).jsx, Some(JsxMode::ReactJsx));
   }
 }

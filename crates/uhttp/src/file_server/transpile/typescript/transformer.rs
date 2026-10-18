@@ -14,6 +14,7 @@ use super::TransformerContext;
 use super::TransformerResult;
 use super::helpers;
 use super::javascript;
+use super::tsconfig::ConfigFs;
 use super::tsconfig::TsConfigCache;
 
 enum TypeScriptTransformerEvent {
@@ -129,6 +130,7 @@ impl TypeScriptTransformer {
       .get_or_init(|| {
         let (tx, rx) = crossbeam::channel::unbounded::<TypeScriptTransformerEvent>();
 
+        let config_fs = ConfigFs::new(Arc::clone(&self.fs), tokio::runtime::Handle::current());
         let tsconfig_cache = Arc::clone(&self.tsconfig_cache);
         let root_dir = self.root_dir.clone();
         let optimize = self.optimize;
@@ -137,6 +139,7 @@ impl TypeScriptTransformer {
 
         for i in 0..self.worker_threads {
           let rx = rx.clone();
+          let config_fs = config_fs.clone();
           let tsconfig_cache = Arc::clone(&tsconfig_cache);
           let root_dir = root_dir.clone();
 
@@ -154,7 +157,7 @@ impl TypeScriptTransformer {
                       source_maps,
                       tx,
                     } => {
-                      let tsconfig = tsconfig_cache.resolve(&path, &root_dir);
+                      let tsconfig = tsconfig_cache.resolve(&config_fs, &path, &root_dir);
 
                       let _ = tx.send(super::transpile::transpile(TransformerContext {
                         content,

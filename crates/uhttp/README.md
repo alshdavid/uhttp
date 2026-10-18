@@ -162,13 +162,14 @@ async fn main() -> anyhow::Result<()> {
       FileServer::builder()
         .root_dir("./static")
         .compress(true)
-        .transpile(TranspileOptions {
-          source_maps: SourceMapMode::Linked,
-          minify: true,
-          mangle: true,
-          compress: true,
-          worker_threads: None,
-        })
+        .transpile(
+          TranspileOptions::builder()
+            .source_maps(SourceMapMode::Linked)
+            .minify(true)
+            .mangle(true)
+            .compress(true)
+            .build(),
+        )
         .build()?,
     )
     .listen("0.0.0.0:8080")

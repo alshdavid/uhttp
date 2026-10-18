@@ -2385,6 +2385,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "uhttp_example_file_server_transpile_include_dir"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "include_dir",
+ "tokio",
+ "uhttp",
+]
+
+[[package]]
 name = "uhttp_example_file_server_with_router"
 version = "0.1.0"
 dependencies = [

@@ -75,7 +75,7 @@ serde_urlencoded = { workspace = true }
 # Optional dependency for the file server filesystem abstraction
 dyn_fs = { workspace = true, features = ["async"], optional = true }
 
-swc_core = { version = "82.1.1", features = [
+swc_core = { version = "82.2.0", features = [
   "common",
   "common_sourcemap",
   "ecma_ast",

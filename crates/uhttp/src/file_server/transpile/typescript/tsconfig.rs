@@ -433,13 +433,13 @@ mod tests {
   use std::fs;
   use std::io::Write;
 
-  use dyn_fs::asynch::TokioFileSystem;
+  use dyn_fs::asynch::AsyncTokioFileSystem;
 
   use super::*;
 
   fn test_fs() -> (ConfigFs, tokio::runtime::Runtime) {
     let runtime = tokio::runtime::Runtime::new().unwrap();
-    let fs = ConfigFs::new(TokioFileSystem::new(), runtime.handle().clone());
+    let fs = ConfigFs::new(AsyncTokioFileSystem::new(), runtime.handle().clone());
     (fs, runtime)
   }
 

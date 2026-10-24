@@ -7,7 +7,7 @@ use super::FileServerCache;
 use super::FileServerOptions;
 use super::create;
 use super::file_system::AsyncFileSystem;
-use super::file_system::TokioFileSystem;
+use super::file_system::AsyncTokioFileSystem;
 use crate::HandleFunc;
 use crate::StatusCode;
 #[cfg(feature = "file_server_transpile")]
@@ -59,7 +59,7 @@ pub struct FileServerBuilder {
 impl Default for FileServerBuilder {
   fn default() -> Self {
     Self {
-      file_system: TokioFileSystem::new(),
+      file_system: AsyncTokioFileSystem::new(),
       root_dir: PathBuf::from("."),
       compress: false,
       etag: ETagStrategy::default(),
@@ -75,7 +75,7 @@ impl Default for FileServerBuilder {
 }
 
 impl FileServerBuilder {
-  /// The filesystem files are read from. Defaults to [`TokioFileSystem`].
+  /// The filesystem files are read from. Defaults to [`AsyncTokioFileSystem`].
   pub fn file_system(
     mut self,
     file_system: Arc<dyn AsyncFileSystem>,

@@ -4,9 +4,9 @@ This document tells an agent (or a person) how to update this repository's Rust 
 
 ## Goal
 
-Update the Rust toolchain and all Rust dependencies to their latest versions. Fix any code broken by API or lint changes. Make sure formatting, linting and tests pass. Open a pull request, and make sure CI passes on it. If no code changes were needed, merge the PR automatically once CI passes and delete its branch.
+Update the Rust toolchain and all Rust dependencies to their latest versions. Fix any code broken by API or lint changes. Make sure formatting, linting and tests pass. Open a pull request (or update the existing one), and make sure CI passes on it. If no code changes were needed, merge the PR automatically once CI passes and delete its branch.
 
-If this runbook was started from an issue, the issue identifier is `<issue-key>`. Use it in the branch name and comment on the issue as described below. If there is no issue, skip every issue-related instruction.
+If this runbook was started from an issue, the issue identifier is `<issue-key>`. Use it when commenting on the issue as described below. If there is no issue, skip every issue-related instruction.
 
 ## Repo-specific facts (keep this section up to date)
 
@@ -25,13 +25,30 @@ Fill these in so future runs don't have to rediscover them.
 - **Clippy must pass with no warnings.** Fix the code rather than adding `#[allow(...)]`, unless a fix would be a large redesign. In that case, allow the lint as narrowly as possible and explain why in the PR.
 - **Do not change the crate `edition`.**
 - **Do not bypass branch protection or review requirements.**
+- **Only one PR at a time.** The work branch is always `sentinel/update-dependencies`. Never create a second PR for this work; if one is already open, update its branch instead.
 
 ## Definitions
 
-- **No code changes** means the PR changes no `.rs` files, including formatting-only changes and added `#[allow(...)]` attributes. Changes limited to `Cargo.toml`, `Cargo.lock`, toolchain files, CI workflow files and Dockerfiles do not count as code changes.
-- **Nothing to update** means neither the toolchain nor any dependency needs updating.
+- **No code changes** means the PR changes no `.rs` files, including formatting-only changes and added `#[allow(...)]` attributes. Changes limited to `Cargo.toml`, `Cargo.lock`, toolchain files, CI workflow files and Dockerfiles do not count as code changes. This is judged on the whole PR (all of its commits against the default branch), not just the changes from this run.
+- **Nothing to update** means neither the toolchain nor any dependency needs updating beyond what is already on the work branch (or on the default branch, if there is no open PR).
 
 ## Steps
+
+### 0. Check for an existing PR and set up the branch
+
+The work branch is `sentinel/update-dependencies`. Run `git fetch origin`, then check for an open PR:
+
+`gh pr list --head sentinel/update-dependencies --state open --json number,url`
+
+- **An open PR exists:** do **not** create a new PR.
+  1. Check out `sentinel/update-dependencies` and pull its latest commits.
+  2. Bring it up to date with the default branch by merging the default branch into it (`git merge origin/<default-branch>`). Do not rebase or force-push.
+  3. If the merge conflicts in `Cargo.lock`, do not open or edit it. Instead run `git checkout origin/<default-branch> -- Cargo.lock`, resolve any other conflicts normally, then let Cargo regenerate the lockfile in step 3.
+  4. Continue with step 1. All further changes are added as new commits on this branch.
+- **No open PR exists:**
+  1. If a `sentinel/update-dependencies` branch still exists on the remote or locally (for example from a closed PR), delete it (`git push origin --delete sentinel/update-dependencies`, `git branch -D sentinel/update-dependencies`).
+  2. Create `sentinel/update-dependencies` fresh from the latest default branch and check it out.
+  3. Continue with step 1.
 
 ### 1. Update the Rust toolchain
 
@@ -50,7 +67,10 @@ Fill these in so future runs don't have to rediscover them.
 - Run `cargo update --dry-run` to see compatible (semver) updates.
 - Find newer major/breaking versions with `cargo outdated` or `cargo upgrade --dry-run` (install `cargo-outdated` or `cargo-edit` if missing), or by checking crates.io for each dependency in `Cargo.toml`.
 
-If the toolchain is current **and** no dependency has an update, the work is "nothing to update". Do not open a PR. Go to step 9 and report that nothing needed updating.
+If the toolchain is current **and** no dependency has an update, the work is "nothing to update":
+
+- **No open PR existed in step 0:** do not open a PR. Delete the branch you created, go to step 9, and report that nothing needed updating.
+- **An open PR exists:** make no new commits and skip to step 7 to check the existing PR's CI status and, if applicable, step 8.
 
 ### 3. Update dependencies
 
@@ -69,17 +89,20 @@ If the toolchain is current **and** no dependency has an update, the work is "no
 2. Run `cargo clippy --all-targets` and fix every warning, including new lints from the toolchain upgrade.
 3. Run `cargo test` and make sure all tests pass.
 
-### 6. Raise a pull request
+### 6. Commit, push, and open or update the PR
 
-- Create a branch. If there is an issue, include its identifier (e.g. `<issue-key>-dependency-updates`); otherwise use something like `rust-dependency-updates`.
-- Commit with clear messages. Keep the toolchain bump (and fixes for new lints) in a **separate commit** from the dependency updates.
-- Push, and open a PR against the default branch with `gh pr create`.
-- Title the PR exactly `Update Rust toolchain and dependencies`. Do not put the issue identifier in the title.
-- The PR description must include:
-  - The toolchain's old → new version, every file where it was changed, and whether `rust-version` (MSRV) changed and why.
-  - Each dependency with its old → new version, taken from your `Cargo.toml` changes and the saved `cargo update` output (never from `Cargo.lock`).
-  - A summary of code changes made for new APIs and new lints, or "No code changes were required."
-  - Any dependencies left un-upgraded and why.
+**Commits:** use clear messages. Keep the toolchain bump (and fixes for new lints) in a **separate commit** from the dependency updates. Push to `sentinel/update-dependencies`.
+
+**If no PR was open in step 0:** open one against the default branch with `gh pr create`. Title it exactly `Update Rust toolchain and dependencies`. Do not put the issue identifier in the title.
+
+**If a PR was already open:** do not run `gh pr create`. The push updates the existing PR. Then update its description with `gh pr edit` so it reflects the **entire** PR as it now stands, not just this run. Merge the new information into the existing description rather than appending a log. Keep the title unchanged.
+
+The PR description must include:
+
+- The toolchain's old → new version (relative to the default branch), every file where it was changed, and whether `rust-version` (MSRV) changed and why.
+- Each dependency with its old → new version (relative to the default branch), taken from your `Cargo.toml` changes and the saved `cargo update` output (never from `Cargo.lock`). If a dependency was bumped again since the PR was opened, show the final version only.
+- A summary of code changes made for new APIs and new lints, or "No code changes were required."
+- Any dependencies left un-upgraded and why.
 
 ### 7. Wait for CI and fix failures
 
@@ -94,8 +117,8 @@ If the toolchain is current **and** no dependency has an update, the work is "no
 Once all CI checks pass (or the PR has none), list the PR's files with `gh pr diff --name-only`.
 
 - **No `.rs` file in the list:** merge with `gh pr merge --merge --delete-branch`, then confirm cleanup:
-  - Check the remote: `git ls-remote --heads origin <branch>`. If the branch still exists, run `git push origin --delete <branch>`.
-  - Switch back to the default branch and delete the local branch with `git branch -D <branch>` if it still exists.
+  - Check the remote: `git ls-remote --heads origin sentinel/update-dependencies`. If the branch still exists, run `git push origin --delete sentinel/update-dependencies`.
+  - Switch back to the default branch and delete the local branch with `git branch -D sentinel/update-dependencies` if it still exists.
   - Report the merged PR link (comment on the issue if there is one).
 - **Any `.rs` file changed:** do not merge. Leave the PR open for review and report the PR link with a one-line summary of the code changes that need review.
 - **Merge blocked** (e.g. branch protection requires an approving review): do not bypass it. Leave the PR open, do not delete the branch, and explain why it couldn't be merged.
@@ -105,6 +128,6 @@ Once all CI checks pass (or the PR has none), list the PR's files with `gh pr di
 Move the issue to Done (or your tracker's equivalent) only when the work is complete, which means either:
 
 - the PR was merged in step 8, or
-- nothing needed updating (comment on the issue saying so).
+- nothing needed updating and no PR is open (comment on the issue saying so).
 
-Do **not** move the issue to Done if the PR was left open for review, CI is still failing after 3 attempts, or the merge was blocked. Leave its status unchanged so a person can follow up.
+Do **not** move the issue to Done if a PR was left open for review, CI is still failing after 3 attempts, or the merge was blocked. Leave its status unchanged so a person can follow up.
